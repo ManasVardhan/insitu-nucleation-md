@@ -1,0 +1,17 @@
+# GPU vs CPU forces (pmd_cuda only): melt, quench, seeded hold at rho* = 0.95
+vproc       1 1 2
+InitUcell   12 12 6
+Density     0.95
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     500
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    1000
+TQuench     0.55
+StepQuench  1000
+StepHold    1000
+RSeed       3.0
+StepRelease 500
+ForceCheck  500
