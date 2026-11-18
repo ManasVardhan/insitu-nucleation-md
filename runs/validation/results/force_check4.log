@@ -1,0 +1,27 @@
+local rank 3 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 1 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 2 -> GPU 0 (Tesla P100-PCIE-16GB)
+Protocol: thermostat 1 tau 0.1 | melt 2 x 1000 | ramp 1000 | hold 0.55 x 1000 | nve 0 | total 3000
+Seed: R 3 frozen through step 2500
+al = 1.291820e+01 1.291820e+01 1.937730e+01
+lc = 5 5 7
+rc = 2.583641e+00 2.583641e+00 2.768186e+00
+local rank 0 -> GPU 0 (Tesla P100-PCIE-16GB)
+nglob = 12288
+nseed = 87
+#  step      time    Ttarget          T             PE             KE             TE
+      0     0.000   2.000000   1.999958    -6.38149475     2.97869727    -3.40279748
+    500     2.500   2.000000   2.009984    -3.37194695     2.99362929    -0.37831766
+FORCECHECK step 500 max_rel_f 2.791e-14 max_df/max_f 1.401e-15 max_f 2.716e+02 max_rel_pe 5.443e-12 rel_petot 3.161e-15
+   1000     5.000   2.000000   2.002806    -3.36949341     2.98293865    -0.38655476
+FORCECHECK step 1000 max_rel_f 4.454e-14 max_df/max_f 1.687e-15 max_f 3.123e+02 max_rel_pe 3.826e-12 rel_petot 1.230e-15
+   1500     7.500   1.275000   1.324377    -4.09064460     1.97250012    -2.11814448
+FORCECHECK step 1500 max_rel_f 3.377e-14 max_df/max_f 1.230e-15 max_f 2.604e+02 max_rel_pe 1.154e-12 rel_petot 2.750e-15
+   2000    10.000   0.550000   0.605760    -5.01802544     0.90220738    -4.11581806
+FORCECHECK step 2000 max_rel_f 3.176e-14 max_df/max_f 2.138e-15 max_f 1.111e+02 max_rel_pe 2.180e-15 rel_petot 1.416e-15
+   2500    12.500   0.550000   0.551098    -5.14725311     0.82079428    -4.32645884
+FORCECHECK step 2500 max_rel_f 8.028e-14 max_df/max_f 1.791e-15 max_f 1.190e+02 max_rel_pe 2.485e-15 rel_petot 3.681e-15
+   3000    15.000   0.550000   0.553973    -5.16333359     0.83095985    -4.33237373
+FORCECHECK step 3000 max_rel_f 3.027e-14 max_df/max_f 2.036e-15 max_f 9.473e+01 max_rel_pe 2.334e-15 rel_petot 6.766e-15
+CPU & COMT = 5.377399e+00 3.017365e-01
+TIMING nglob 12288 nproc 4 steps 3000 wall 5.3774 step_ms 1.7925 force_ms 1.0991 comm_ms 0.1006
