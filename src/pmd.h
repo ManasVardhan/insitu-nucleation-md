@@ -80,6 +80,8 @@ totEnergy = Total energy.
 temperature = Current temperature (mobile atoms only).
 stepCount = Current time step.
 seedFrozen = 1 while the seed atoms are held at their lattice sites.
+simcomm = Communicator of the MD (SIM) ranks; MPI_COMM_WORLD unless the
+  in situ build splits off analysis ranks.
 ----------------------------------------------------------------------*/
 double al[3];
 int n,nb,nglob;
@@ -97,6 +99,7 @@ double rc[3];
 double kinEnergy,potEnergy,totEnergy,temperature;
 int stepCount;
 int seedFrozen;
+MPI_Comm simcomm;
 double DeltaTH;    /* Half the time step */
 double Uc, Duc;    /* Potential cut-off parameters */
 
@@ -126,6 +129,15 @@ int XYZInterval;    /* XYZ output interval, 0 = off */
 char XYZPrefix[256];
 int ForceCheck;     /* CUDA build: GPU vs CPU force check interval */
 double RandSeed;
+/* In situ analysis (-DINSITU build, insitu.c): InsituRanks ANA ranks in
+   addition to the vproc SIM ranks (0 = analysis off); analysis every
+   InsituInterval steps from step InsituStart; movie snapshot every
+   InsituMovie analysis steps (0 = off); InsituCheck = 1 writes full
+   dumps for the post hoc equivalence check. */
+int InsituRanks,InsituInterval,InsituStart,InsituMovie,InsituCheck;
+int InsituClusMin;
+double InsituThr;
+char InsituPrefix[256];
 
 /* Functions & function prototypes------------------------------------*/
 
@@ -153,6 +165,8 @@ void init_conf();
 void single_step();
 void half_kick();
 void atom_copy();
+int halo_copy(double w, double (*x)[3], int *g, int nmax);
+void insitu_send();
 void compute_accel();
 double compute_accel_cpu(double (*f)[3], double *pe);
 void thermostat();
@@ -164,6 +178,6 @@ void write_xyz();
 void force_check();
 void abort_if(int cond, const char *msg);
 void check_ids();
-int bbd(double* ri, int ku);
+int bbd(double* ri, int ku, double w);
 int bmv(double* ri, int ku);
 /*--------------------------------------------------------------------*/

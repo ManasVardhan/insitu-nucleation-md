@@ -6,12 +6,20 @@ systems using the Message Passing Interface (MPI) standard.
 #ifdef USE_CUDA
 #include "force_cuda.h"
 #endif
+#ifdef INSITU
+#include "insitu.h"
+#include "steinhardt.h"
+insitu_cfg icfg;
+#endif
 
 /*--------------------------------------------------------------------*/
 int main(int argc, char **argv) {
 /*--------------------------------------------------------------------*/
   double cpu1;
   int size;
+#ifdef INSITU
+  int a;
+#endif
 #ifdef USE_CUDA
   MPI_Comm shm;
   int lrank;
@@ -23,14 +31,43 @@ int main(int argc, char **argv) {
   setvbuf(stdout,NULL,_IOLBF,0); /* Line-buffered log for batch jobs */
 
   init_params(argc > 1 ? argv[1] : "pmd.in");
+#ifdef INSITU
+  /* World ranks 0..nproc-1 run MD (SIM), the rest analyze (ANA); on an
+     ANA rank the new communicator is the ANA communicator */
+  abort_if(size != nproc+InsituRanks, "MPI size != vproc product + InsituRanks");
+  MPI_Comm_split(MPI_COMM_WORLD,sid < nproc ? 0 : 1,sid,&simcomm);
+  icfg.nsim = nproc; icfg.nana = InsituRanks;
+  icfg.interval = InsituInterval; icfg.start = InsituStart;
+  icfg.last = StepLimit; icfg.movie = InsituMovie; icfg.check = InsituCheck;
+  icfg.clusmin = InsituClusMin; icfg.rq = STEINHARDT_RQ_DEFAULT;
+  icfg.thr = InsituThr; icfg.dt = DeltaT;
+  icfg.nglob = 4*InitUcell[0]*InitUcell[1]*InitUcell[2]*nproc;
+  for (a=0; a<3; a++) icfg.box[a] = vproc[a]*al[a];
+  strcpy(icfg.prefix,InsituPrefix);
+  if (sid == 0)
+    printf("Insitu: SIM %d ANA %d K %d start %d steps %d movie %d check %d\n",
+           nproc,InsituRanks,InsituInterval,InsituStart,insitu_nsteps(&icfg),
+           InsituMovie,InsituCheck);
+  if (InsituRanks > 0)
+    for (a=0; a<3; a++)
+      abort_if(al[a] < 2.0*icfg.rq, "subdomain thinner than the analysis halo");
+  if (sid >= nproc) { /* ANA rank */
+    insitu_ana_run(&icfg,simcomm);
+    MPI_Finalize();
+    return 0;
+  }
+#else
+  simcomm = MPI_COMM_WORLD;
   abort_if(size != nproc, "MPI size does not match vproc");
+#endif
+  MPI_Comm_rank(simcomm, &sid);
   /* Vector index of this processor */
   vid[0] = sid/(vproc[1]*vproc[2]);
   vid[1] = (sid/vproc[2])%vproc[1];
   vid[2] = sid%vproc[2];
 #ifdef USE_CUDA
   /* One GPU per rank, chosen by the rank index within the node */
-  MPI_Comm_split_type(MPI_COMM_WORLD,MPI_COMM_TYPE_SHARED,sid,
+  MPI_Comm_split_type(simcomm,MPI_COMM_TYPE_SHARED,sid,
                       MPI_INFO_NULL,&shm);
   MPI_Comm_rank(shm,&lrank);
   force_cuda_init(lrank,&r[0][0],sizeof(r),&ra[0][0],sizeof(ra),
@@ -57,7 +94,13 @@ int main(int argc, char **argv) {
 #ifdef CHECK_IDS
     if (stepCount%StepAvg == 0) check_ids();
 #endif
+#ifdef INSITU
+    if (insitu_is_step(&icfg,stepCount)) insitu_send();
+#endif
   }
+#ifdef INSITU
+  if (InsituRanks > 0) insitu_sim_finish(&icfg,simcomm);
+#endif
   cpu = MPI_Wtime() - cpu1;
   if (sid == 0) {
     printf("CPU & COMT = %le %le\n",cpu,comt);
@@ -93,6 +136,9 @@ pair per line; '#' starts a comment.
   RSeed = 0.0; StepRelease = 0;
   XYZInterval = 0; strcpy(XYZPrefix,"traj");
   ForceCheck = 0; RandSeed = 13597.0;
+  InsituRanks = 0; InsituInterval = 100; InsituStart = 0; InsituMovie = 0;
+  InsituCheck = 0; InsituClusMin = 20; InsituThr = 0.308;
+  strcpy(InsituPrefix,"insitu");
 
   /* Read control parameters */
   fp = fopen(fname,"r");
@@ -124,6 +170,14 @@ pair per line; '#' starts a comment.
     else if (!strcmp(key,"XYZPrefix")) sscanf(p,"%255s",XYZPrefix);
     else if (!strcmp(key,"ForceCheck")) sscanf(p,"%d",&ForceCheck);
     else if (!strcmp(key,"RandSeed")) sscanf(p,"%le",&RandSeed);
+    else if (!strcmp(key,"InsituRanks")) sscanf(p,"%d",&InsituRanks);
+    else if (!strcmp(key,"InsituInterval")) sscanf(p,"%d",&InsituInterval);
+    else if (!strcmp(key,"InsituStart")) sscanf(p,"%d",&InsituStart);
+    else if (!strcmp(key,"InsituMovie")) sscanf(p,"%d",&InsituMovie);
+    else if (!strcmp(key,"InsituCheck")) sscanf(p,"%d",&InsituCheck);
+    else if (!strcmp(key,"InsituClusMin")) sscanf(p,"%d",&InsituClusMin);
+    else if (!strcmp(key,"InsituThr")) sscanf(p,"%le",&InsituThr);
+    else if (!strcmp(key,"InsituPrefix")) sscanf(p,"%255s",InsituPrefix);
     else if (sid == 0) printf("Unknown keyword: %s\n",key);
   }
   fclose(fp);
@@ -228,12 +282,12 @@ rv are initialized with a random velocity corresponding to Temperature.
     }
   }
   /* Total # of atoms summed over processors */
-  MPI_Allreduce(&n,&nglob,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(&n,&nglob,1,MPI_INT,MPI_SUM,simcomm);
   if (sid == 0) printf("nglob = %d\n",nglob);
 
   /* Global atom IDs: ranks own consecutive ID blocks */
   ioff = 0;
-  MPI_Exscan(&n,&ioff,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Exscan(&n,&ioff,1,MPI_INT,MPI_SUM,simcomm);
   if (sid == 0) ioff = 0;
   for (j=0; j<n; j++) {gid[j] = ioff+j; ity[j] = 0;}
 
@@ -247,7 +301,7 @@ rv are initialized with a random velocity corresponding to Temperature.
       }
       if (rr < RSeed*RSeed) {ity[j] = 1; nseed++;}
     }
-    MPI_Allreduce(&nseed,&gseed,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    MPI_Allreduce(&nseed,&gseed,1,MPI_INT,MPI_SUM,simcomm);
     if (sid == 0) printf("nseed = %d\n",gseed);
   }
   seedFrozen = (RSeed > 0.0 && StepFreeze >= 0);
@@ -266,7 +320,7 @@ rv are initialized with a random velocity corresponding to Temperature.
     }
     vSum[3] += 1.0;
   }
-  MPI_Allreduce(vSum,gvSum,4,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(vSum,gvSum,4,MPI_DOUBLE,MPI_SUM,simcomm);
 
   /* Make the total momentum zero */
   for (a=0; a<3; a++) gvSum[a] /= gvSum[3];
@@ -307,7 +361,7 @@ Removes the center-of-mass velocity (used when the seed is released).
   int i,a;
   for (a=0; a<3; a++) loc[a] = 0.0;
   for (i=0; i<n; i++) for (a=0; a<3; a++) loc[a] += rv[i][a];
-  MPI_Allreduce(loc,glb,3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(loc,glb,3,MPI_DOUBLE,MPI_SUM,simcomm);
   for (i=0; i<n; i++) for (a=0; a<3; a++) rv[i][a] -= glb[a]/nglob;
 }
 
@@ -338,7 +392,7 @@ velocity rescaling.
     for (vv=0.0, a=0; a<3; a++) vv += rv[i][a]*rv[i][a];
     loc[0] += 0.5*vv; loc[1] += 1.0;
   }
-  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,simcomm);
   t = 2.0*glb[0]/(3.0*glb[1]);
   if (t <= 0.0) return;
   lam = sqrt(1.0+DeltaT/TauT*(target_temp(stepCount)/t-1.0));
@@ -363,8 +417,21 @@ Accelerates atomic velocities, rv, by half the time step.
 /*--------------------------------------------------------------------*/
 void atom_copy() {
 /*----------------------------------------------------------------------
+Exchanges boundary-atom coordinates among neighbor nodes for the force
+computation: copies of width RCUT are appended to r & gid.
+----------------------------------------------------------------------*/
+  nb = halo_copy(RCUT,r,gid,NEMAX);
+}
+
+/*--------------------------------------------------------------------*/
+int halo_copy(double w, double (*x)[3], int *g, int nmax) {
+/*----------------------------------------------------------------------
 Exchanges boundary-atom coordinates among neighbor nodes:  Makes 
-boundary-atom list, LSB, then sends & receives boundary atoms.
+boundary-atom list, LSB, then sends & receives boundary atoms.  x[0:n-1]
+& g[0:n-1] hold the residents; atoms within w of a face are copied, and
+the copies are appended to x & g (at most nmax atoms in all).  Returns
+the # of copies.  atom_copy uses w = RCUT on r & gid; the in situ
+analysis uses w = 2*r_q on separate arrays.
 ----------------------------------------------------------------------*/
   int kd,kdd,i,ku,inode,nsd,nrc,a;
   int nbnew = 0; /* # of "received" boundary atoms */
@@ -385,7 +452,7 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
         ku = 2*kd+kdd; /* Neighbor ID */
         /* Add an atom to the boundary-atom list, LSB, for neighbor ku 
            according to bit-condition function, bbd */
-        if (bbd(r[i],ku)) lsb[ku][++(lsb[ku][0])] = i;
+        if (bbd(x[i],ku,w)) lsb[ku][++(lsb[ku][0])] = i;
         abort_if(lsb[ku][0] >= NBMAX-1, "atom_copy: NBMAX exceeded");
       }
     }
@@ -405,15 +472,15 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
 
       /* Even node: send & recv */
       if (myparity[kd] == 0) {
-        MPI_Send(&nsd,1,MPI_INT,inode,10,MPI_COMM_WORLD);
+        MPI_Send(&nsd,1,MPI_INT,inode,10,simcomm);
         MPI_Recv(&nrc,1,MPI_INT,MPI_ANY_SOURCE,10,
-                 MPI_COMM_WORLD,&status);
+                 simcomm,&status);
       }
       /* Odd node: recv & send */
       else if (myparity[kd] == 1) {
         MPI_Recv(&nrc,1,MPI_INT,MPI_ANY_SOURCE,10,
-                 MPI_COMM_WORLD,&status);
-        MPI_Send(&nsd,1,MPI_INT,inode,10,MPI_COMM_WORLD);
+                 simcomm,&status);
+        MPI_Send(&nsd,1,MPI_INT,inode,10,simcomm);
       }
       /* Single layer: Exchange information with myself */
       else
@@ -423,26 +490,26 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
       /* Send & receive information on boundary atoms-----------------*/
 
       abort_if(4*nsd > NDBUF || 4*nrc > NDBUF, "atom_copy: NDBUF exceeded");
-      abort_if(n+nbnew+nrc > NEMAX, "atom_copy: NEMAX exceeded");
+      abort_if(n+nbnew+nrc > nmax, "atom_copy: NEMAX exceeded");
 
       /* Message buffering: coordinates & global ID */
       for (i=1; i<=nsd; i++) {
         for (a=0; a<3; a++) /* Shift the coordinate origin */
-          dbuf[4*(i-1)+a] = r[lsb[ku][i]][a]-sv[ku][a]; 
-        dbuf[4*(i-1)+3] = gid[lsb[ku][i]];
+          dbuf[4*(i-1)+a] = x[lsb[ku][i]][a]-sv[ku][a]; 
+        dbuf[4*(i-1)+3] = g[lsb[ku][i]];
       }
 
       /* Even node: send & recv */
       if (myparity[kd] == 0) {
-        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
+        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,simcomm);
         MPI_Recv(dbufr,4*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
-                 MPI_COMM_WORLD,&status);
+                 simcomm,&status);
       }
       /* Odd node: recv & send */
       else if (myparity[kd] == 1) {
         MPI_Recv(dbufr,4*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
-                 MPI_COMM_WORLD,&status);
-        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
+                 simcomm,&status);
+        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,simcomm);
       }
       /* Single layer: Exchange information with myself */
       else
@@ -450,15 +517,15 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
 
       /* Message storing */
       for (i=0; i<nrc; i++) {
-        for (a=0; a<3; a++) r[n+nbnew+i][a] = dbufr[4*i+a]; 
-        gid[n+nbnew+i] = (int)dbufr[4*i+3];
+        for (a=0; a<3; a++) x[n+nbnew+i][a] = dbufr[4*i+a]; 
+        g[n+nbnew+i] = (int)dbufr[4*i+3];
       }
 
       /* Increment the # of received boundary atoms */
       nbnew = nbnew+nrc;
 
       /* Internode synchronization */
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(simcomm);
 
     } /* Endfor lower & higher directions, kdd */
 
@@ -468,8 +535,8 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
 
   /* Main loop over x, y & z directions ends--------------------------*/
 
-  /* Update the # of received boundary atoms */
-  nb = nbnew;
+  /* Return the # of received boundary atoms */
+  return nbnew;
 }
 
 /*--------------------------------------------------------------------*/
@@ -490,7 +557,7 @@ the per-atom potential energy, pea[0:n-1], for the residents.
   fct += MPI_Wtime()-t1;
 
   /* Global potential energy */
-  MPI_Allreduce(&lpe,&potEnergy,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(&lpe,&potEnergy,1,MPI_DOUBLE,MPI_SUM,simcomm);
 }
 
 /*--------------------------------------------------------------------*/
@@ -623,7 +690,7 @@ Evaluates physical properties: kinetic, potential & total energies.
     loc[0] += 0.5*vv;
     if (!(seedFrozen && ity[i])) loc[1] += 1.0;
   }
-  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,simcomm);
 
   /* Energy per atom */
   kinEnergy = glb[0]/nglob;
@@ -700,15 +767,15 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 
       /* Even node: send & recv */
       if (myparity[kd] == 0) {
-        MPI_Send(&nsd,1,MPI_INT,inode,110,MPI_COMM_WORLD);
+        MPI_Send(&nsd,1,MPI_INT,inode,110,simcomm);
         MPI_Recv(&nrc,1,MPI_INT,MPI_ANY_SOURCE,110,
-                 MPI_COMM_WORLD,&status);
+                 simcomm,&status);
       }
       /* Odd node: recv & send */
       else if (myparity[kd] == 1) {
         MPI_Recv(&nrc,1,MPI_INT,MPI_ANY_SOURCE,110,
-                 MPI_COMM_WORLD,&status);
-        MPI_Send(&nsd,1,MPI_INT,inode,110,MPI_COMM_WORLD);
+                 simcomm,&status);
+        MPI_Send(&nsd,1,MPI_INT,inode,110,simcomm);
       }
       /* Single layer: Exchange information with myself */
       else
@@ -734,15 +801,15 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 
       /* Even node: send & recv, if not empty */
       if (myparity[kd] == 0) {
-        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
+        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,simcomm);
         MPI_Recv(dbufr,8*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
-                 MPI_COMM_WORLD,&status);
+                 simcomm,&status);
       }
       /* Odd node: recv & send, if not empty */
       else if (myparity[kd] == 1) {
         MPI_Recv(dbufr,8*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
-                 MPI_COMM_WORLD,&status);
-        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
+                 simcomm,&status);
+        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,simcomm);
       }
       /* Single layer: Exchange information with myself */
       else
@@ -762,7 +829,7 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
       newim = newim+nrc;
 
       /* Internode synchronization */
-      MPI_Barrier(MPI_COMM_WORLD);
+      MPI_Barrier(simcomm);
 
     } /* Endfor lower & higher directions, kdd */
 
@@ -794,19 +861,19 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 /*----------------------------------------------------------------------
 Bit condition functions:
 
-1. bbd(ri,ku) is .true. if coordinate ri[3] is in the boundary to 
-     neighbor ku.
+1. bbd(ri,ku,w) is .true. if coordinate ri[3] is in the boundary (of
+     width w) to neighbor ku.
 2. bmv(ri,ku) is .true. if an atom with coordinate ri[3] has moved out 
      to neighbor ku.
 ----------------------------------------------------------------------*/
-int bbd(double* ri, int ku) {
+int bbd(double* ri, int ku, double w) {
   int kd,kdd;
   kd = ku/2; /* x(0)|y(1)|z(2) direction */
   kdd = ku%2; /* Lower(0)|higher(1) direction */
   if (kdd == 0)
-    return ri[kd] < RCUT;
+    return ri[kd] < w;
   else
-    return al[kd]-RCUT < ri[kd];
+    return al[kd]-w < ri[kd];
 }
 int bmv(double* ri, int ku) {
   int kd,kdd;
@@ -845,10 +912,10 @@ file <XYZPrefix>_<step>.xyz ordered by global ID.  Columns: ID, type
     loc[6*i+5] = pea[i];
   }
   k = 6*n;
-  MPI_Gather(&k,1,MPI_INT,cnt,1,MPI_INT,0,MPI_COMM_WORLD);
+  MPI_Gather(&k,1,MPI_INT,cnt,1,MPI_INT,0,simcomm);
   if (sid == 0) for (dsp[0]=0, i=1; i<nproc; i++) dsp[i] = dsp[i-1]+cnt[i-1];
   MPI_Gatherv(loc,k,MPI_DOUBLE,rbuf,cnt,dsp,MPI_DOUBLE,
-              0,MPI_COMM_WORLD);
+              0,simcomm);
   if (sid != 0) return;
 
   ntot = (dsp[nproc-1]+cnt[nproc-1])/6;
@@ -869,6 +936,35 @@ file <XYZPrefix>_<step>.xyz ordered by global ID.  Columns: ID, type
             all[6*i+2],all[6*i+3],all[6*i+4],all[6*i+5]);
   fclose(fp);
 }
+
+#ifdef INSITU
+/*--------------------------------------------------------------------*/
+void insitu_send() {
+/*----------------------------------------------------------------------
+Analysis step on a SIM rank: copies the residents to separate arrays,
+adds a halo of width 2*r_q with halo_copy (the force cache r[n:n+nb-1]
+is untouched) & hands the block to insitu_sim_send (MPI_Isend to the ANA
+rank).  With InsituCheck, also writes the full-precision dump.
+----------------------------------------------------------------------*/
+  static double (*xa)[3] = NULL;
+  static int *ga = NULL;
+  double t1,c0,org[3];
+  int nh,a;
+
+  if (xa == NULL) {
+    xa = malloc(sizeof(double)*3*NEMAX); ga = malloc(sizeof(int)*NEMAX);
+    abort_if(xa == NULL || ga == NULL, "insitu_send: out of memory");
+  }
+  t1 = MPI_Wtime(); c0 = comt;
+  memcpy(xa,r,sizeof(double)*3*n);
+  memcpy(ga,gid,sizeof(int)*n);
+  nh = halo_copy(2.0*icfg.rq,xa,ga,NEMAX);
+  comt = c0; /* keep the MD communication time separate */
+  for (a=0; a<3; a++) org[a] = vid[a]*al[a];
+  insitu_sim_send(&icfg,stepCount,n,n+nh,&xa[0][0],ga,org,MPI_Wtime()-t1);
+  if (InsituCheck) insitu_sim_dump(&icfg,simcomm,stepCount,n,&r[0][0],gid,org);
+}
+#endif
 
 #ifdef USE_CUDA
 /*--------------------------------------------------------------------*/
@@ -901,8 +997,8 @@ max per-atom relative PE error & the relative error of the total PE.
     if (d > loc[3]) loc[3] = d;
     sl[0] += pea[i];
   }
-  MPI_Allreduce(loc,glb,4,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
-  MPI_Allreduce(sl,sg,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(loc,glb,4,MPI_DOUBLE,MPI_MAX,simcomm);
+  MPI_Allreduce(sl,sg,2,MPI_DOUBLE,MPI_SUM,simcomm);
   if (sid == 0)
     printf("FORCECHECK step %d max_rel_f %.3e max_df/max_f %.3e max_f %.3e "
            "max_rel_pe %.3e rel_petot %.3e\n",stepCount,glb[0],
@@ -941,9 +1037,9 @@ cached copy sits at a periodic image of the resident with the same ID.
     for (a=0; a<3; a++) loc[4*i+1+a] = r[i][a]+vid[a]*al[a];
   }
   k = 4*n;
-  MPI_Allgather(&k,1,MPI_INT,cnt,1,MPI_INT,MPI_COMM_WORLD);
+  MPI_Allgather(&k,1,MPI_INT,cnt,1,MPI_INT,simcomm);
   for (dsp[0]=0, i=1; i<nproc; i++) dsp[i] = dsp[i-1]+cnt[i-1];
-  MPI_Allgatherv(loc,k,MPI_DOUBLE,all,cnt,dsp,MPI_DOUBLE,MPI_COMM_WORLD);
+  MPI_Allgatherv(loc,k,MPI_DOUBLE,all,cnt,dsp,MPI_DOUBLE,simcomm);
   for (i=0; i<3*nglob; i++) tab[i] = MOVED_OUT;
   for (i=0; i<(dsp[nproc-1]+cnt[nproc-1])/4; i++) {
     k = (int)all[4*i];
@@ -960,7 +1056,7 @@ cached copy sits at a periodic image of the resident with the same ID.
       if (fabs(d) > 1e-8) {bad++; break;}
     }
   }
-  MPI_Allreduce(&bad,&gbad,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(&bad,&gbad,1,MPI_INT,MPI_SUM,simcomm);
   if (sid == 0) printf("CHECK_IDS step %d errors %d\n",stepCount,gbad);
 }
 #endif
