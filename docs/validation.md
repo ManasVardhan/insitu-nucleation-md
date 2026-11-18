@@ -120,3 +120,72 @@ raw output in `runs/validation/results/timing.txt`.
 The GPU force time includes the H→D/D→H copies and the cell sort. At larger N the
 remaining host work (atom_copy/atom_move packing, integration) is about half of the GPU
 step time, so it is the next bottleneck. A100/A40 numbers come in Phase 3.
+
+## T1.4 Quench point and seed size
+
+Smoke tests with `scripts/smoke.slurm` / `scripts/run_smoke.sh`: N = 108000 (30^3 FCC cells),
+ρ* = 0.95, one rank on one P100 per run (7.3 ms/step). Protocol: melt at T* = 2.0 for 5000
+steps, linear ramp to T_q over 2000 steps, hold. The hold starts at step 7000. Seeds are
+frozen until step 8000 (StepRelease = 1000), then released. Crystallinity:
+
+- **PE proxy:** change of PE per atom relative to the start of the hold (mean over hold
+  steps 1000 to 3000), at constant T. Crystallization releases latent heat, so PE drops;
+  full crystallization is about -0.4.
+- **Cross-check:** `analysis/solid_frac.py` (ten Wolde q6 criterion, r_q = 1.5): fraction of
+  solid-like atoms and the largest solid cluster. A perfect FCC frame gives 1.0, and the
+  equilibrated liquid gives 1e-4.
+
+ΔPE per atom vs hold steps (from `runs/smoke/results/summary.txt`):
+
+| T_q | R_seed (atoms) | 10k | 20k | 30k | 40k | 50k | 60k | 80k | Outcome |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.55 | none | -0.007 | -0.007 | -0.020 | -0.062 | -0.151 | -0.250 | -0.302 | nucleates on its own |
+| 0.55 | 4.0 (249) | -0.015 | -0.057 | -0.172 | -0.335 | -0.411 | -0.422 | -0.431 | grows (fast) |
+| **0.70** | **none** | +0.004 | +0.004 | -0.001 | +0.002 | +0.002 | +0.001 | +0.006 | **stays liquid** |
+| 0.70 | 2.5 (55) | +0.001 | -0.002 | +0.003 | -0.001 | +0.004 | | | melts |
+| 0.70 | 3.0 (87) | -0.001 | -0.002 | +0.004 | +0.004 | +0.003 | | | melts |
+| 0.70 | 4.0 (249) | -0.002 | -0.021 | -0.070 | -0.165 | -0.283 | -0.363 | -0.405 | grows |
+| 0.70 | 4.0 (249), 2nd velocity seed | -0.005 | -0.028 | -0.089 | -0.193 | -0.310 | -0.364 | | grows |
+| **0.70** | **4.5 (369)** | -0.003 | -0.038 | -0.126 | -0.252 | -0.349 | -0.395 | | **grows** |
+| 0.85 | none | +0.004 | +0.004 | +0.004 | -0.001 | +0.001 | -0.001 | -0.003 | liquid |
+| 0.85 | 4.0 (249) | +0.001 | -0.001 | +0.004 | -0.002 | -0.002 | +0.003 | -0.003 | seed melts |
+
+Largest solid cluster (q6 criterion) at absolute steps 10k, 20k, 30k, 40k, 50k, 60k, 80k:
+
+| Run | 10k | 20k | 30k | 40k | 50k | 60k | 80k |
+|---|---|---|---|---|---|---|---|
+| T 0.55, no seed | 33 | 152 | 945 | 3779 | | 44882 | 71635 |
+| T 0.70, no seed | 8 | 6 | 8 | 7 | 12 | 12 | 9 |
+| T 0.70, R 3.0 | 155 | 7 | 6 | 10 | 8 | | |
+| T 0.70, R 4.0 | 676 | 2243 | 6753 | 18384 | 38944 | 62942 | 80770 |
+| T 0.70, R 4.0 (2nd seed) | 646 | 2662 | 8245 | 23541 | 45952 | 67216 | |
+| T 0.70, R 4.5 | 777 | 3390 | 12656 | 32140 | 57760 | 73450 | |
+| T 0.85, R 4.0 | | | | 3 | | | 5 |
+
+**Chosen parameters: ρ* = 0.95, T_q = 0.70, R_seed = 4.5 (369 atoms), StepRelease = 1000.**
+
+- At the starting guess T_q = 0.55 the unseeded liquid nucleates homogeneously within about
+  15k to 25k hold steps (cluster of 152 at step 20k, 945 at 30k), which would compete with
+  the seed. It is too deep.
+- At T_q = 0.70 the unseeded liquid shows no drift in PE and no solid cluster larger than 12
+  atoms over 80k hold steps, while a seed of R = 4.0 or 4.5 grows steadily: the crystal
+  passes half the box between 40k and 60k hold steps. This is the window the in situ
+  analysis needs.
+- The critical seed at T_q = 0.70 lies between 87 atoms (R = 3.0, melts within 13k steps)
+  and 249 atoms (R = 4.0, grows in 2 of 2 realizations). R = 4.5 adds margin against
+  a stochastic melt of a near-critical seed, and grows a little faster.
+- At T_q = 0.85 even the R = 4.0 seed melts, which brackets the useful range from above.
+- The planned T_q = 1.00 runs were cancelled to free the debug node, since 0.85 already
+  shows seed melting.
+
+Ready-to-use inputs: `runs/nucleation/seeded.in` (2 GPUs, vproc 1 1 2, 108000 atoms, 80k hold,
+XYZ every 5000 steps) and `runs/nucleation/unseeded.in` (control). A short 2-GPU test of
+`seeded.in` (P100) confirmed 369 seed atoms straddling the rank boundary stay frozen
+until release and move after it, and GPU vs CPU forces agree to 7e-14. Step time is
+4.0 ms, so the full 87k-step run takes about 6 minutes on 2 P100s.
+
+Caveats: the smoke tests ran on one rank, the production input on two (same physics, as
+checked above). The seed's surroundings partly order while it is frozen (cluster of
+about 650 atoms 2000 steps after release for R = 4.0), so the effective initial nucleus
+is larger than the frozen seed. Each case was run once, except R = 4.0 at T_q = 0.70,
+which was run twice.
