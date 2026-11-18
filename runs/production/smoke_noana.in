@@ -1,0 +1,29 @@
+# Smoke test baseline: analysis off (InsituRanks 0), 4 SIM ranks only.
+# N = 4*64^3 = 1048576 atoms at rho* = 0.95 (box L = 103.4), 4 SIM ranks
+# (vproc 2 2 1, one A100 each, 2 nodes) + 4 ANA ranks (CPU, OpenMP).
+# Melt at T* = 2.0, ramp to T_q = 0.70 over 2000 steps, hold 150000 steps.
+# Spherical FCC seed R = 4.5 (369 atoms) at the box center, frozen until
+# 1000 steps after the ramp. Analysis every 100 steps; movie snapshot
+# every 10 analysis steps (1000 MD steps).
+# Run: sbatch scripts/production.slurm
+vproc       2 2 1
+InitUcell   32 32 64
+Density     0.95
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     1000
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    1000
+TQuench     0.70
+StepQuench  500
+StepHold    2500
+RSeed       4.5
+StepRelease 500
+InsituRanks 0
+InsituInterval 100
+InsituStart 0
+InsituMovie 10
+InsituCheck 0
+InsituPrefix smoke0
