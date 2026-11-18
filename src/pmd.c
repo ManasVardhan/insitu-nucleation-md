@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
   MPI_Init(&argc,&argv); /* Initialize the MPI environment */
   MPI_Comm_rank(MPI_COMM_WORLD, &sid);  /* My processor ID */
   MPI_Comm_size(MPI_COMM_WORLD, &size);
+  setvbuf(stdout,NULL,_IOLBF,0); /* Line-buffered log for batch jobs */
 
   init_params(argc > 1 ? argv[1] : "pmd.in");
   abort_if(size != nproc, "MPI size does not match vproc");
@@ -875,8 +876,8 @@ void force_check() {
 /*----------------------------------------------------------------------
 Recomputes the forces of the current configuration on the CPU and
 compares them with the GPU result in ra & pea.  Reports the max per-atom
-relative force error |dF|/|F| (mobile atoms), max |dF| normalized by max |F|, the max
-per-atom PE error, and the relative error of the total PE.
+relative force error |dF|/|F| (mobile atoms), max |dF| / max |F|, the
+max per-atom relative PE error & the relative error of the total PE.
 ----------------------------------------------------------------------*/
   static double fc[NMAX][3],pc[NMAX];
   double loc[4],glb[4],sl[2],sg[2],df,fn,d;
