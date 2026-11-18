@@ -1,0 +1,19 @@
+# LJ liquid near the triple point: melt, cool to T* = 0.722, NVT hold, then
+# 10k NVE steps with the thermostat off. Used for g(r), thermostat settling
+# and NVE energy drift.
+vproc       1 1 2
+InitUcell   16 16 8
+Density     0.8442
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     10
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    2000
+TQuench     0.722
+StepQuench  1000
+StepHold    4000
+StepNVE     10000
+XYZInterval 500
+XYZPrefix   nve
