@@ -1,0 +1,24 @@
+# Primary seeded nucleation run (T1.4 choice), 2 GPUs.
+# N = 4*30^3 = 108000 atoms at rho* = 0.95. Melt at T* = 2.0, ramp to the
+# quench point T* = 0.70 over 2000 steps, hold 80000 steps. A spherical FCC
+# seed of radius 4.5 (369 atoms) is frozen through the melt and for 1000
+# steps after the ramp, then released; it grows through the box within
+# about 60k hold steps. The unseeded liquid stays liquid at this point.
+# Run: srun -n 2 --gres=gpu:2 src/pmd_cuda runs/nucleation/seeded.in
+vproc       1 1 2
+InitUcell   30 30 15
+Density     0.95
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     500
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    5000
+TQuench     0.70
+StepQuench  2000
+StepHold    80000
+RSeed       4.5
+StepRelease 1000
+XYZInterval 5000
+XYZPrefix   seeded

@@ -1,0 +1,63 @@
+T0.55_R0/smoke.log: Tq 0.55 <T> 0.5499 PE0 -5.1687 | dPE 10k:-0.0065 20k:-0.0074 30k:-0.0196 40k:-0.0622 50k:-0.1506 60k:-0.2496 70k:-0.2880 80k:-0.3018
+T0.55_R4.0/smoke.log: Tq 0.55 <T> 0.5500 PE0 -5.1714 | dPE 10k:-0.0149 20k:-0.0571 30k:-0.1724 40k:-0.3345 50k:-0.4106 60k:-0.4224 70k:-0.4296 80k:-0.4307
+T0.70_R0/smoke.log: Tq 0.7 <T> 0.6999 PE0 -4.9364 | dPE 10k:+0.0043 20k:+0.0044 30k:-0.0013 40k:+0.0022 50k:+0.0018 60k:+0.0009 70k:-0.0009 80k:+0.0057
+T0.70_R2.5/smoke.log: Tq 0.7 <T> 0.7001 PE0 -4.9378 | dPE 10k:+0.0010 20k:-0.0019 30k:+0.0030 40k:-0.0006 50k:+0.0042
+T0.70_R3.0/smoke.log: Tq 0.7 <T> 0.7000 PE0 -4.9375 | dPE 10k:-0.0005 20k:-0.0019 30k:+0.0036 40k:+0.0039 50k:+0.0034
+T0.70_R4.0_s24681/smoke.log: Tq 0.7 <T> 0.7001 PE0 -4.9404 | dPE 10k:-0.0046 20k:-0.0279 30k:-0.0894 40k:-0.1929 50k:-0.3101 60k:-0.3638
+T0.70_R4.0/smoke.log: Tq 0.7 <T> 0.7000 PE0 -4.9395 | dPE 10k:-0.0015 20k:-0.0214 30k:-0.0704 40k:-0.1649 50k:-0.2832 60k:-0.3627 70k:-0.3885 80k:-0.4047
+T0.70_R4.5/smoke.log: Tq 0.7 <T> 0.7001 PE0 -4.9398 | dPE 10k:-0.0027 20k:-0.0381 30k:-0.1257 40k:-0.2522 50k:-0.3494 60k:-0.3951
+T0.85_R0/smoke.log: Tq 0.85 <T> 0.8502 PE0 -4.7190 | dPE 10k:+0.0038 20k:+0.0041 30k:+0.0042 40k:-0.0005 50k:+0.0006 60k:-0.0013 70k:+0.0042 80k:-0.0030
+T0.85_R4.0/smoke.log: Tq 0.85 <T> 0.8501 PE0 -4.7180 | dPE 10k:+0.0011 20k:-0.0012 30k:+0.0044 40k:-0.0021 50k:-0.0016 60k:+0.0025 70k:+0.0008 80k:-0.0027
+
+T0.55_R0/smoke_00010000.xyz: solid fraction 0.0042  largest cluster 33
+T0.55_R0/smoke_00020000.xyz: solid fraction 0.0080  largest cluster 152
+T0.55_R0/smoke_00030000.xyz: solid fraction 0.0185  largest cluster 945
+T0.55_R0/smoke_00040000.xyz: solid fraction 0.0594  largest cluster 3779
+T0.55_R0/smoke_00060000.xyz: solid fraction 0.4166  largest cluster 44882
+T0.55_R0/smoke_00080000.xyz: solid fraction 0.6635  largest cluster 71635
+T0.55_R4.0/smoke_00010000.xyz: solid fraction 0.0115  largest cluster 830
+T0.55_R4.0/smoke_00020000.xyz: solid fraction 0.0484  largest cluster 4540
+T0.55_R4.0/smoke_00030000.xyz: solid fraction 0.1781  largest cluster 18388
+T0.55_R4.0/smoke_00040000.xyz: solid fraction 0.4908  largest cluster 52885
+T0.55_R4.0/smoke_00060000.xyz: solid fraction 0.9145  largest cluster 98770
+T0.55_R4.0/smoke_00080000.xyz: solid fraction 0.9449  largest cluster 102047
+T0.70_R0/smoke_00010000.xyz: solid fraction 0.0012  largest cluster 8
+T0.70_R0/smoke_00020000.xyz: solid fraction 0.0013  largest cluster 6
+T0.70_R0/smoke_00030000.xyz: solid fraction 0.0016  largest cluster 8
+T0.70_R0/smoke_00040000.xyz: solid fraction 0.0014  largest cluster 7
+T0.70_R0/smoke_00050000.xyz: solid fraction 0.0012  largest cluster 12
+T0.70_R0/smoke_00060000.xyz: solid fraction 0.0017  largest cluster 12
+T0.70_R0/smoke_00080000.xyz: solid fraction 0.0013  largest cluster 9
+T0.70_R2.5/smoke_00010000.xyz: solid fraction 0.0015  largest cluster 8
+T0.70_R2.5/smoke_00020000.xyz: solid fraction 0.0013  largest cluster 7
+T0.70_R2.5/smoke_00030000.xyz: solid fraction 0.0014  largest cluster 9
+T0.70_R2.5/smoke_00040000.xyz: solid fraction 0.0015  largest cluster 9
+T0.70_R2.5/smoke_00050000.xyz: solid fraction 0.0015  largest cluster 8
+T0.70_R3.0/smoke_00010000.xyz: solid fraction 0.0027  largest cluster 155
+T0.70_R3.0/smoke_00020000.xyz: solid fraction 0.0014  largest cluster 7
+T0.70_R3.0/smoke_00030000.xyz: solid fraction 0.0013  largest cluster 6
+T0.70_R3.0/smoke_00040000.xyz: solid fraction 0.0014  largest cluster 10
+T0.70_R3.0/smoke_00050000.xyz: solid fraction 0.0014  largest cluster 8
+T0.70_R4.0_s24681/smoke_00010000.xyz: solid fraction 0.0073  largest cluster 646
+T0.70_R4.0_s24681/smoke_00020000.xyz: solid fraction 0.0259  largest cluster 2662
+T0.70_R4.0_s24681/smoke_00030000.xyz: solid fraction 0.0776  largest cluster 8245
+T0.70_R4.0_s24681/smoke_00040000.xyz: solid fraction 0.2188  largest cluster 23541
+T0.70_R4.0_s24681/smoke_00050000.xyz: solid fraction 0.4259  largest cluster 45952
+T0.70_R4.0_s24681/smoke_00060000.xyz: solid fraction 0.6225  largest cluster 67216
+T0.70_R4.0/smoke_00010000.xyz: solid fraction 0.0078  largest cluster 676
+T0.70_R4.0/smoke_00020000.xyz: solid fraction 0.0221  largest cluster 2243
+T0.70_R4.0/smoke_00030000.xyz: solid fraction 0.0635  largest cluster 6753
+T0.70_R4.0/smoke_00040000.xyz: solid fraction 0.1710  largest cluster 18384
+T0.70_R4.0/smoke_00050000.xyz: solid fraction 0.3610  largest cluster 38944
+T0.70_R4.0/smoke_00060000.xyz: solid fraction 0.5830  largest cluster 62942
+T0.70_R4.0/smoke_00080000.xyz: solid fraction 0.7479  largest cluster 80770
+T0.70_R4.5/smoke_00010000.xyz: solid fraction 0.0082  largest cluster 777
+T0.70_R4.5/smoke_00020000.xyz: solid fraction 0.0327  largest cluster 3390
+T0.70_R4.5/smoke_00030000.xyz: solid fraction 0.1181  largest cluster 12656
+T0.70_R4.5/smoke_00040000.xyz: solid fraction 0.2984  largest cluster 32140
+T0.70_R4.5/smoke_00050000.xyz: solid fraction 0.5351  largest cluster 57760
+T0.70_R4.5/smoke_00060000.xyz: solid fraction 0.6802  largest cluster 73450
+T0.85_R0/smoke_00040000.xyz: solid fraction 0.0005  largest cluster 6
+T0.85_R0/smoke_00080000.xyz: solid fraction 0.0008  largest cluster 3
+T0.85_R4.0/smoke_00040000.xyz: solid fraction 0.0005  largest cluster 3
+T0.85_R4.0/smoke_00080000.xyz: solid fraction 0.0005  largest cluster 5

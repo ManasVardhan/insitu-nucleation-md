@@ -1,0 +1,19 @@
+# Unseeded control at the same quench point (stays liquid for 80k hold steps
+# in the smoke test). Run: srun -n 2 --gres=gpu:2 src/pmd_cuda runs/nucleation/unseeded.in
+vproc       1 1 2
+InitUcell   30 30 15
+Density     0.95
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     500
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    5000
+TQuench     0.70
+StepQuench  2000
+StepHold    80000
+RSeed       0.0
+StepRelease 1000
+XYZInterval 5000
+XYZPrefix   unseeded
