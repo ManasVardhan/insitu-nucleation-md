@@ -3,12 +3,19 @@ Program pmd.c performs parallel molecular-dynamics for Lennard-Jones
 systems using the Message Passing Interface (MPI) standard.
 ----------------------------------------------------------------------*/
 #include "pmd.h"
+#ifdef USE_CUDA
+#include "force_cuda.h"
+#endif
 
 /*--------------------------------------------------------------------*/
 int main(int argc, char **argv) {
 /*--------------------------------------------------------------------*/
   double cpu1;
   int size;
+#ifdef USE_CUDA
+  MPI_Comm shm;
+  int lrank;
+#endif
 
   MPI_Init(&argc,&argv); /* Initialize the MPI environment */
   MPI_Comm_rank(MPI_COMM_WORLD, &sid);  /* My processor ID */
@@ -20,6 +27,14 @@ int main(int argc, char **argv) {
   vid[0] = sid/(vproc[1]*vproc[2]);
   vid[1] = (sid/vproc[2])%vproc[1];
   vid[2] = sid%vproc[2];
+#ifdef USE_CUDA
+  /* One GPU per rank, chosen by the rank index within the node */
+  MPI_Comm_split_type(MPI_COMM_WORLD,MPI_COMM_TYPE_SHARED,sid,
+                      MPI_INFO_NULL,&shm);
+  MPI_Comm_rank(shm,&lrank);
+  force_cuda_init(lrank,&r[0][0],sizeof(r),&ra[0][0],sizeof(ra),
+                  pea,sizeof(pea));
+#endif
 
   set_topology(); 
   init_conf();
@@ -35,6 +50,9 @@ int main(int argc, char **argv) {
     single_step(); 
     if (stepCount%StepAvg == 0) eval_props();
     if (XYZInterval > 0 && stepCount%XYZInterval == 0) write_xyz();
+#ifdef USE_CUDA
+    if (ForceCheck > 0 && stepCount%ForceCheck == 0) force_check();
+#endif
 #ifdef CHECK_IDS
     if (stepCount%StepAvg == 0) check_ids();
 #endif
@@ -46,6 +64,9 @@ int main(int argc, char **argv) {
            "force_ms %.4f comm_ms %.4f\n",nglob,nproc,StepLimit,cpu,
            1e3*cpu/StepLimit,1e3*fct/StepLimit,1e3*comt/StepLimit);
   }
+#ifdef USE_CUDA
+  force_cuda_finalize();
+#endif
 
   MPI_Finalize(); /* Clean up the MPI environment */
   return 0;
@@ -460,7 +481,11 @@ the per-atom potential energy, pea[0:n-1], for the residents.
   double lpe,t1;
 
   t1 = MPI_Wtime();
+#ifdef USE_CUDA
+  lpe = force_cuda(n,nb,&r[0][0],&ra[0][0],pea,lc,rc,RCUT,Uc,Duc);
+#else
   lpe = compute_accel_cpu(ra,pea);
+#endif
   fct += MPI_Wtime()-t1;
 
   /* Global potential energy */
@@ -843,6 +868,46 @@ file <XYZPrefix>_<step>.xyz ordered by global ID.  Columns: ID, type
             all[6*i+2],all[6*i+3],all[6*i+4],all[6*i+5]);
   fclose(fp);
 }
+
+#ifdef USE_CUDA
+/*--------------------------------------------------------------------*/
+void force_check() {
+/*----------------------------------------------------------------------
+Recomputes the forces of the current configuration on the CPU and
+compares them with the GPU result in ra & pea.  Reports the max per-atom
+relative force error |dF|/|F| (mobile atoms), max |dF| normalized by max |F|, the max
+per-atom PE error, and the relative error of the total PE.
+----------------------------------------------------------------------*/
+  static double fc[NMAX][3],pc[NMAX];
+  double loc[4],glb[4],sl[2],sg[2],df,fn,d;
+  int i,a;
+
+  sl[1] = compute_accel_cpu(fc,pc);
+  for (a=0; a<4; a++) loc[a] = 0.0;
+  sl[0] = 0.0;
+  for (i=0; i<n; i++) {
+    for (df=fn=0.0, a=0; a<3; a++) {
+      d = ra[i][a]-fc[i][a];
+      df += d*d; fn += fc[i][a]*fc[i][a];
+    }
+    df = sqrt(df); fn = sqrt(fn);
+    /* Frozen seed atoms sit at F ~ 0 by symmetry & their F is unused */
+    if (!(seedFrozen && ity[i]) && fn > 0.0 && df/fn > loc[0])
+      loc[0] = df/fn;
+    if (df > loc[1]) loc[1] = df;
+    if (fn > loc[2]) loc[2] = fn;
+    d = fabs(pea[i]-pc[i])/fabs(pc[i]);
+    if (d > loc[3]) loc[3] = d;
+    sl[0] += pea[i];
+  }
+  MPI_Allreduce(loc,glb,4,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allreduce(sl,sg,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  if (sid == 0)
+    printf("FORCECHECK step %d max_rel_f %.3e max_df/max_f %.3e max_f %.3e "
+           "max_rel_pe %.3e rel_petot %.3e\n",stepCount,glb[0],
+           glb[1]/glb[2],glb[2],glb[3],fabs(sg[0]-sg[1])/fabs(sg[1]));
+}
+#endif
 
 /*--------------------------------------------------------------------*/
 void abort_if(int cond, const char *msg) {
