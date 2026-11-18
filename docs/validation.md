@@ -171,7 +171,7 @@ Largest solid cluster (q6 criterion) at absolute steps 10k, 20k, 30k, 40k, 50k, 
   atoms over 80k hold steps, while a seed of R = 4.0 or 4.5 grows steadily: the crystal
   passes half the box between 40k and 60k hold steps. This is the window the in situ
   analysis needs.
-- The critical seed at T_q = 0.70 lies between 87 atoms (R = 3.0, melts within 13k steps)
+- The critical seed at T_q = 0.70 lies between 87 atoms (R = 3.0, cluster of 155 at step 10k, gone by step 20k)
   and 249 atoms (R = 4.0, grows in 2 of 2 realizations). R = 4.5 adds margin against
   a stochastic melt of a near-critical seed, and grows a little faster.
 - At T_q = 0.85 even the R = 4.0 seed melts, which brackets the useful range from above.
