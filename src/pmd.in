@@ -1,6 +1,8 @@
-16 16 16
-0.8
-1.0
-0.005
-10
-11
+# Baseline LJ run (same physics as the course pmd.in)
+vproc      1 1 2      # processor grid, product = # of MPI ranks
+InitUcell  16 16 16   # FCC unit cells per rank
+Density    0.8
+InitTemp   1.0
+DeltaT     0.005
+StepLimit  200
+StepAvg    50

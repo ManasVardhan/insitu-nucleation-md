@@ -8,50 +8,81 @@ systems using the Message Passing Interface (MPI) standard.
 int main(int argc, char **argv) {
 /*--------------------------------------------------------------------*/
   double cpu1;
+  int size;
 
   MPI_Init(&argc,&argv); /* Initialize the MPI environment */
   MPI_Comm_rank(MPI_COMM_WORLD, &sid);  /* My processor ID */
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+  init_params(argc > 1 ? argv[1] : "pmd.in");
+  abort_if(size != nproc, "MPI size does not match vproc");
   /* Vector index of this processor */
   vid[0] = sid/(vproc[1]*vproc[2]);
   vid[1] = (sid/vproc[2])%vproc[1];
   vid[2] = sid%vproc[2];
 
-  init_params();
   set_topology(); 
   init_conf();
   atom_copy();
   compute_accel(); /* Computes initial accelerations */ 
 
   cpu1 = MPI_Wtime();
+  comt = fct = 0.0;
   for (stepCount=1; stepCount<=StepLimit; stepCount++) {
     single_step(); 
     if (stepCount%StepAvg == 0) eval_props();
+#ifdef CHECK_IDS
+    if (stepCount%StepAvg == 0) check_ids();
+#endif
   }
   cpu = MPI_Wtime() - cpu1;
-  if (sid == 0) printf("CPU & COMT = %le %le\n",cpu,comt);
+  if (sid == 0) {
+    printf("CPU & COMT = %le %le\n",cpu,comt);
+    printf("TIMING nglob %d nproc %d steps %d wall %.4f step_ms %.4f "
+           "force_ms %.4f comm_ms %.4f\n",nglob,nproc,StepLimit,cpu,
+           1e3*cpu/StepLimit,1e3*fct/StepLimit,1e3*comt/StepLimit);
+  }
 
   MPI_Finalize(); /* Clean up the MPI environment */
   return 0;
 }
 
 /*--------------------------------------------------------------------*/
-void init_params() {
+void init_params(char *fname) {
 /*----------------------------------------------------------------------
-Initializes parameters.
+Initializes parameters.  The control file has one "keyword value(s)"
+pair per line; '#' starts a comment.
 ----------------------------------------------------------------------*/
   int a;
   double rr,ri2,ri6,r1;
+  char line[512],key[64],*p;
   FILE *fp;
 
+  /* Defaults */
+  InitUcell[0] = InitUcell[1] = InitUcell[2] = 8;
+  Density = 0.8; InitTemp = 1.0; DeltaT = 0.005;
+  StepLimit = 100; StepAvg = 10;
+
   /* Read control parameters */
-  fp = fopen("pmd.in","r");
-  fscanf(fp,"%d%d%d",&InitUcell[0],&InitUcell[1],&InitUcell[2]);
-  fscanf(fp,"%le",&Density);
-  fscanf(fp,"%le",&InitTemp);
-  fscanf(fp,"%le",&DeltaT);
-  fscanf(fp,"%d",&StepLimit);
-  fscanf(fp,"%d",&StepAvg);
+  fp = fopen(fname,"r");
+  abort_if(fp == NULL, "cannot open input file");
+  while (fgets(line,sizeof(line),fp)) {
+    if ((p = strchr(line,'#')) != NULL) *p = '\0';
+    if (sscanf(line,"%63s",key) != 1) continue;
+    p = strstr(line,key) + strlen(key);
+    if      (!strcmp(key,"vproc"))
+      sscanf(p,"%d%d%d",&vproc[0],&vproc[1],&vproc[2]);
+    else if (!strcmp(key,"InitUcell"))
+      sscanf(p,"%d%d%d",&InitUcell[0],&InitUcell[1],&InitUcell[2]);
+    else if (!strcmp(key,"Density"))  sscanf(p,"%le",&Density);
+    else if (!strcmp(key,"InitTemp")) sscanf(p,"%le",&InitTemp);
+    else if (!strcmp(key,"DeltaT"))   sscanf(p,"%le",&DeltaT);
+    else if (!strcmp(key,"StepLimit"))sscanf(p,"%d",&StepLimit);
+    else if (!strcmp(key,"StepAvg"))  sscanf(p,"%d",&StepAvg);
+    else if (sid == 0) printf("Unknown keyword: %s\n",key);
+  }
   fclose(fp);
+  nproc = vproc[0]*vproc[1]*vproc[2];
 
   /* Compute basic parameters */
   DeltaTH = 0.5*DeltaT;
@@ -116,7 +147,7 @@ r are initialized to face-centered cubic (fcc) lattice positions.
 rv are initialized with a random velocity corresponding to Temperature.  
 ----------------------------------------------------------------------*/
   double c[3],gap[3],e[3],vSum[3],gvSum[3],vMag;
-  int j,a,nX,nY,nZ;
+  int j,a,nX,nY,nZ,ioff;
   double seed;
   /* FCC atoms in the original unit cell */
   double origAtom[4][3] = {{0.0, 0.0, 0.0}, {0.0, 0.5, 0.5},
@@ -142,6 +173,12 @@ rv are initialized with a random velocity corresponding to Temperature.
   /* Total # of atoms summed over processors */
   MPI_Allreduce(&n,&nglob,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
   if (sid == 0) printf("nglob = %d\n",nglob);
+
+  /* Global atom IDs: ranks own consecutive ID blocks */
+  ioff = 0;
+  MPI_Exscan(&n,&ioff,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  if (sid == 0) ioff = 0;
+  for (j=0; j<n; j++) {gid[j] = ioff+j; ity[j] = 0;}
 
   /* Generate random velocities */
   seed = 13597.0+sid;
@@ -214,6 +251,7 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
         /* Add an atom to the boundary-atom list, LSB, for neighbor ku 
            according to bit-condition function, bbd */
         if (bbd(r[i],ku)) lsb[ku][++(lsb[ku][0])] = i;
+        abort_if(lsb[ku][0] >= NBMAX-1, "atom_copy: NBMAX exceeded");
       }
     }
 
@@ -249,30 +287,37 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
 
       /* Send & receive information on boundary atoms-----------------*/
 
-      /* Message buffering */
-      for (i=1; i<=nsd; i++)
+      abort_if(4*nsd > NDBUF || 4*nrc > NDBUF, "atom_copy: NDBUF exceeded");
+      abort_if(n+nbnew+nrc > NEMAX, "atom_copy: NEMAX exceeded");
+
+      /* Message buffering: coordinates & global ID */
+      for (i=1; i<=nsd; i++) {
         for (a=0; a<3; a++) /* Shift the coordinate origin */
-          dbuf[3*(i-1)+a] = r[lsb[ku][i]][a]-sv[ku][a]; 
+          dbuf[4*(i-1)+a] = r[lsb[ku][i]][a]-sv[ku][a]; 
+        dbuf[4*(i-1)+3] = gid[lsb[ku][i]];
+      }
 
       /* Even node: send & recv */
       if (myparity[kd] == 0) {
-        MPI_Send(dbuf,3*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
-        MPI_Recv(dbufr,3*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
+        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
+        MPI_Recv(dbufr,4*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
                  MPI_COMM_WORLD,&status);
       }
       /* Odd node: recv & send */
       else if (myparity[kd] == 1) {
-        MPI_Recv(dbufr,3*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
+        MPI_Recv(dbufr,4*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,20,
                  MPI_COMM_WORLD,&status);
-        MPI_Send(dbuf,3*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
+        MPI_Send(dbuf,4*nsd,MPI_DOUBLE,inode,20,MPI_COMM_WORLD);
       }
       /* Single layer: Exchange information with myself */
       else
-        for (i=0; i<3*nrc; i++) dbufr[i] = dbuf[i];
+        for (i=0; i<4*nrc; i++) dbufr[i] = dbuf[i];
 
       /* Message storing */
-      for (i=0; i<nrc; i++)
-        for (a=0; a<3; a++) r[n+nbnew+i][a] = dbufr[3*i+a]; 
+      for (i=0; i<nrc; i++) {
+        for (a=0; a<3; a++) r[n+nbnew+i][a] = dbufr[4*i+a]; 
+        gid[n+nbnew+i] = (int)dbufr[4*i+3];
+      }
 
       /* Increment the # of received boundary atoms */
       nbnew = nbnew+nrc;
@@ -296,22 +341,41 @@ boundary-atom list, LSB, then sends & receives boundary atoms.
 void compute_accel() {
 /*----------------------------------------------------------------------
 Given atomic coordinates, r[0:n+nb-1][], for the extended (i.e., 
-resident & copied) system, computes the acceleration, ra[0:n-1][], for 
-the residents.
+resident & copied) system, computes the acceleration, ra[0:n-1][], and
+the per-atom potential energy, pea[0:n-1], for the residents.
+----------------------------------------------------------------------*/
+  double lpe,t1;
+
+  t1 = MPI_Wtime();
+  lpe = compute_accel_cpu(ra,pea);
+  fct += MPI_Wtime()-t1;
+
+  /* Global potential energy */
+  MPI_Allreduce(&lpe,&potEnergy,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+}
+
+/*--------------------------------------------------------------------*/
+double compute_accel_cpu(double (*f)[3], double *pe) {
+/*----------------------------------------------------------------------
+CPU linked-cell force loop.  Returns the local potential energy.
 ----------------------------------------------------------------------*/
   int i,j,a,lc2[3],lcyz2,lcxyz2,mc[3],c,mc1[3],c1;
   int bintra;
-  double dr[3],rr,ri2,ri6,r1,rrCut,fcVal,f,vVal,lpe;
+  double dr[3],rr,ri2,ri6,r1,rrCut,fcVal,fa,vVal,lpe;
 
   /* Reset the potential & forces */
   lpe = 0.0;
-  for (i=0; i<n; i++) for (a=0; a<3; a++) ra[i][a] = 0.0;
+  for (i=0; i<n; i++) {
+    pe[i] = 0.0;
+    for (a=0; a<3; a++) f[i][a] = 0.0;
+  }
 
   /* Make a linked-cell list, lscl------------------------------------*/
 
   for (a=0; a<3; a++) lc2[a] = lc[a]+2;
   lcyz2 = lc2[1]*lc2[2];
   lcxyz2 = lc2[0]*lcyz2;
+  abort_if(lcxyz2 > NCLMAX, "compute_accel: NCLMAX exceeded");
 
   /* Reset the headers, head */
   for (c=0; c<lcxyz2; c++) head[c] = EMPTY;
@@ -382,10 +446,12 @@ the residents.
               fcVal = 48.0*ri2*ri6*(ri6-0.5) + Duc/r1;
               vVal = 4.0*ri6*(ri6-1.0) - Uc - Duc*(r1-RCUT);
               if (bintra) lpe += vVal; else lpe += 0.5*vVal;
+              pe[i] += 0.5*vVal;
+              if (bintra) pe[j] += 0.5*vVal;
               for (a=0; a<3; a++) {
-                f = fcVal*dr[a];
-                ra[i][a] += f;
-                if (bintra) ra[j][a] -= f;
+                fa = fcVal*dr[a];
+                f[i][a] += fa;
+                if (bintra) f[j][a] -= fa;
               }
             }
           } /* Endif not self */
@@ -400,8 +466,7 @@ the residents.
 
   } /* Endfor central cell, c */
 
-  /* Global potential energy */
-  MPI_Allreduce(&lpe,&potEnergy,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  return lpe;
 }
 
 /*--------------------------------------------------------------------*/
@@ -445,7 +510,7 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
   ku; MVQUE[ku][k>0] is the atom ID, used in r, of the k-th atom to be
   moved.
 ----------------------------------------------------------------------*/
-  int mvque[6][NBMAX];
+  static int mvque[6][NBMAX];
   int newim = 0; /* # of new immigrants */
   int ku,kd,i,kdd,kul,kuh,inode,ipt,a,nsd,nrc;
   double com1;
@@ -470,6 +535,8 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
         /* Move to the higher direction */
         else if (bmv(r[i],kuh)) mvque[kuh][++(mvque[kuh][0])] = i;
       }
+      abort_if(mvque[kul][0] >= NBMAX-1 || mvque[kuh][0] >= NBMAX-1,
+               "atom_move: NBMAX exceeded");
     }
 
     /* Message passing with neighbor nodes----------------------------*/
@@ -505,37 +572,46 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
 
       /* Send & receive information on boundary atoms-----------------*/
 
-      /* Message buffering */
-      for (i=1; i<=nsd; i++)
+      abort_if(8*nsd > NDBUF || 8*nrc > NDBUF, "atom_move: NDBUF exceeded");
+      abort_if(n+newim+nrc > NMAX, "atom_move: NMAX exceeded");
+
+      /* Message buffering: coordinates, velocities, global ID & type */
+      for (i=1; i<=nsd; i++) {
         for (a=0; a<3; a++) {
           /* Shift the coordinate origin */
-          dbuf[6*(i-1)  +a] = r [mvque[ku][i]][a]-sv[ku][a]; 
-          dbuf[6*(i-1)+3+a] = rv[mvque[ku][i]][a];
-          r[mvque[ku][i]][0] = MOVED_OUT; /* Mark the moved-out atom */
+          dbuf[8*(i-1)  +a] = r [mvque[ku][i]][a]-sv[ku][a]; 
+          dbuf[8*(i-1)+3+a] = rv[mvque[ku][i]][a];
         }
+        dbuf[8*(i-1)+6] = gid[mvque[ku][i]];
+        dbuf[8*(i-1)+7] = ity[mvque[ku][i]];
+        r[mvque[ku][i]][0] = MOVED_OUT; /* Mark the moved-out atom */
+      }
 
       /* Even node: send & recv, if not empty */
       if (myparity[kd] == 0) {
-        MPI_Send(dbuf,6*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
-        MPI_Recv(dbufr,6*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
+        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
+        MPI_Recv(dbufr,8*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
                  MPI_COMM_WORLD,&status);
       }
       /* Odd node: recv & send, if not empty */
       else if (myparity[kd] == 1) {
-        MPI_Recv(dbufr,6*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
+        MPI_Recv(dbufr,8*nrc,MPI_DOUBLE,MPI_ANY_SOURCE,120,
                  MPI_COMM_WORLD,&status);
-        MPI_Send(dbuf,6*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
+        MPI_Send(dbuf,8*nsd,MPI_DOUBLE,inode,120,MPI_COMM_WORLD);
       }
       /* Single layer: Exchange information with myself */
       else
-        for (i=0; i<6*nrc; i++) dbufr[i] = dbuf[i];
+        for (i=0; i<8*nrc; i++) dbufr[i] = dbuf[i];
 
       /* Message storing */
-      for (i=0; i<nrc; i++)
+      for (i=0; i<nrc; i++) {
         for (a=0; a<3; a++) {
-          r [n+newim+i][a] = dbufr[6*i  +a]; 
-          rv[n+newim+i][a] = dbufr[6*i+3+a];
+          r [n+newim+i][a] = dbufr[8*i  +a]; 
+          rv[n+newim+i][a] = dbufr[8*i+3+a];
         }
+        gid[n+newim+i] = (int)dbufr[8*i+6];
+        ity[n+newim+i] = (int)dbufr[8*i+7];
+      }
 
       /* Increment the # of new immigrants */
       newim = newim+nrc;
@@ -560,6 +636,8 @@ mvque[6][NBMAX]: mvque[ku][0] is the # of to-be-moved atoms to neighbor
         r [ipt][a] = r [i][a];
         rv[ipt][a] = rv[i][a];
       }
+      gid[ipt] = gid[i];
+      ity[ipt] = ity[i];
       ++ipt;
     }
   }
@@ -594,3 +672,58 @@ int bmv(double* ri, int ku) {
   else
     return al[kd] < ri[kd];
 }
+
+/*--------------------------------------------------------------------*/
+void abort_if(int cond, const char *msg) {
+/*--------------------------------------------------------------------*/
+  if (cond) {
+    fprintf(stderr,"rank %d: %s\n",sid,msg);
+    MPI_Abort(MPI_COMM_WORLD,1);
+  }
+}
+
+#ifdef CHECK_IDS
+/*--------------------------------------------------------------------*/
+void check_ids() {
+/*----------------------------------------------------------------------
+Debug check: every global ID is owned by exactly one rank, and every
+cached copy sits at a periodic image of the resident with the same ID.
+----------------------------------------------------------------------*/
+  static double *tab=NULL,*loc,*all;
+  static int *cnt,*dsp;
+  int i,a,k,bad=0,gbad;
+  double d,L;
+
+  if (tab == NULL) {
+    tab = malloc(sizeof(double)*3*nglob); all = malloc(sizeof(double)*4*nglob);
+    loc = malloc(sizeof(double)*4*NMAX);
+    cnt = malloc(sizeof(int)*nproc); dsp = malloc(sizeof(int)*nproc);
+  }
+  for (i=0; i<n; i++) {
+    loc[4*i] = gid[i];
+    for (a=0; a<3; a++) loc[4*i+1+a] = r[i][a]+vid[a]*al[a];
+  }
+  k = 4*n;
+  MPI_Allgather(&k,1,MPI_INT,cnt,1,MPI_INT,MPI_COMM_WORLD);
+  for (dsp[0]=0, i=1; i<nproc; i++) dsp[i] = dsp[i-1]+cnt[i-1];
+  MPI_Allgatherv(loc,k,MPI_DOUBLE,all,cnt,dsp,MPI_DOUBLE,MPI_COMM_WORLD);
+  for (i=0; i<3*nglob; i++) tab[i] = MOVED_OUT;
+  for (i=0; i<(dsp[nproc-1]+cnt[nproc-1])/4; i++) {
+    k = (int)all[4*i];
+    if (k < 0 || k >= nglob || tab[3*k] != MOVED_OUT) bad++;
+    else for (a=0; a<3; a++) tab[3*k+a] = all[4*i+1+a];
+  }
+  if ((dsp[nproc-1]+cnt[nproc-1])/4 != nglob) bad++;
+  for (i=n; i<n+nb; i++) {
+    k = gid[i];
+    for (a=0; a<3; a++) {
+      L = vproc[a]*al[a];
+      d = r[i][a]+vid[a]*al[a]-tab[3*k+a];
+      d -= L*floor(d/L+0.5);
+      if (fabs(d) > 1e-8) {bad++; break;}
+    }
+  }
+  MPI_Allreduce(&bad,&gbad,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+  if (sid == 0) printf("CHECK_IDS step %d errors %d\n",stepCount,gbad);
+}
+#endif
