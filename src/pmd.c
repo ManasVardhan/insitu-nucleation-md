@@ -25,12 +25,16 @@ int main(int argc, char **argv) {
   init_conf();
   atom_copy();
   compute_accel(); /* Computes initial accelerations */ 
+  stepCount = 0;
+  eval_props();
+  if (XYZInterval > 0) write_xyz();
 
   cpu1 = MPI_Wtime();
   comt = fct = 0.0;
   for (stepCount=1; stepCount<=StepLimit; stepCount++) {
     single_step(); 
     if (stepCount%StepAvg == 0) eval_props();
+    if (XYZInterval > 0 && stepCount%XYZInterval == 0) write_xyz();
 #ifdef CHECK_IDS
     if (stepCount%StepAvg == 0) check_ids();
 #endif
@@ -62,6 +66,11 @@ pair per line; '#' starts a comment.
   InitUcell[0] = InitUcell[1] = InitUcell[2] = 8;
   Density = 0.8; InitTemp = 1.0; DeltaT = 0.005;
   StepLimit = 100; StepAvg = 10;
+  Thermostat = 0; TauT = 0.1; TMelt = TQuench = 1.0;
+  StepMelt = StepQuench = StepHold = StepNVE = 0;
+  RSeed = 0.0; StepRelease = 0;
+  XYZInterval = 0; strcpy(XYZPrefix,"traj");
+  ForceCheck = 0; RandSeed = 13597.0;
 
   /* Read control parameters */
   fp = fopen(fname,"r");
@@ -79,10 +88,36 @@ pair per line; '#' starts a comment.
     else if (!strcmp(key,"DeltaT"))   sscanf(p,"%le",&DeltaT);
     else if (!strcmp(key,"StepLimit"))sscanf(p,"%d",&StepLimit);
     else if (!strcmp(key,"StepAvg"))  sscanf(p,"%d",&StepAvg);
+    else if (!strcmp(key,"Thermostat")) sscanf(p,"%d",&Thermostat);
+    else if (!strcmp(key,"TauT"))     sscanf(p,"%le",&TauT);
+    else if (!strcmp(key,"TMelt"))    sscanf(p,"%le",&TMelt);
+    else if (!strcmp(key,"TQuench"))  sscanf(p,"%le",&TQuench);
+    else if (!strcmp(key,"StepMelt")) sscanf(p,"%d",&StepMelt);
+    else if (!strcmp(key,"StepQuench")) sscanf(p,"%d",&StepQuench);
+    else if (!strcmp(key,"StepHold")) sscanf(p,"%d",&StepHold);
+    else if (!strcmp(key,"StepNVE"))  sscanf(p,"%d",&StepNVE);
+    else if (!strcmp(key,"RSeed"))    sscanf(p,"%le",&RSeed);
+    else if (!strcmp(key,"StepRelease")) sscanf(p,"%d",&StepRelease);
+    else if (!strcmp(key,"XYZInterval")) sscanf(p,"%d",&XYZInterval);
+    else if (!strcmp(key,"XYZPrefix")) sscanf(p,"%255s",XYZPrefix);
+    else if (!strcmp(key,"ForceCheck")) sscanf(p,"%d",&ForceCheck);
+    else if (!strcmp(key,"RandSeed")) sscanf(p,"%le",&RandSeed);
     else if (sid == 0) printf("Unknown keyword: %s\n",key);
   }
   fclose(fp);
   nproc = vproc[0]*vproc[1]*vproc[2];
+
+  /* A protocol, if given, overrides StepLimit */
+  if (StepMelt+StepQuench+StepHold+StepNVE > 0)
+    StepLimit = StepMelt+StepQuench+StepHold+StepNVE;
+  StepFreeze = StepMelt+StepQuench+StepRelease;
+  if (sid == 0) {
+    printf("Protocol: thermostat %d tau %g | melt %g x %d | ramp %d | "
+           "hold %g x %d | nve %d | total %d\n",Thermostat,TauT,TMelt,
+           StepMelt,StepQuench,TQuench,StepHold,StepNVE,StepLimit);
+    if (RSeed > 0.0) printf("Seed: R %g frozen through step %d\n",
+                            RSeed,StepFreeze);
+  }
 
   /* Compute basic parameters */
   DeltaTH = 0.5*DeltaT;
@@ -146,8 +181,8 @@ void init_conf() {
 r are initialized to face-centered cubic (fcc) lattice positions.  
 rv are initialized with a random velocity corresponding to Temperature.  
 ----------------------------------------------------------------------*/
-  double c[3],gap[3],e[3],vSum[3],gvSum[3],vMag;
-  int j,a,nX,nY,nZ,ioff;
+  double c[3],gap[3],e[3],vSum[4],gvSum[4],vMag,rr,d;
+  int j,a,nX,nY,nZ,ioff,nseed,gseed;
   double seed;
   /* FCC atoms in the original unit cell */
   double origAtom[4][3] = {{0.0, 0.0, 0.0}, {0.0, 0.5, 0.5},
@@ -180,23 +215,43 @@ rv are initialized with a random velocity corresponding to Temperature.
   if (sid == 0) ioff = 0;
   for (j=0; j<n; j++) {gid[j] = ioff+j; ity[j] = 0;}
 
-  /* Generate random velocities */
-  seed = 13597.0+sid;
+  /* Seed atoms: within RSeed of the global box center */
+  nseed = 0;
+  if (RSeed > 0.0) {
+    for (j=0; j<n; j++) {
+      for (rr=0.0, a=0; a<3; a++) {
+        d = r[j][a]+vid[a]*al[a]-0.5*vproc[a]*al[a];
+        rr += d*d;
+      }
+      if (rr < RSeed*RSeed) {ity[j] = 1; nseed++;}
+    }
+    MPI_Allreduce(&nseed,&gseed,1,MPI_INT,MPI_SUM,MPI_COMM_WORLD);
+    if (sid == 0) printf("nseed = %d\n",gseed);
+  }
+  seedFrozen = (RSeed > 0.0 && StepFreeze >= 0);
+
+  /* Generate random velocities (frozen seed atoms stay at rest) */
+  seed = RandSeed+sid;
   vMag = sqrt(3*InitTemp);
-  for(a=0; a<3; a++) vSum[a] = 0.0;
+  for(a=0; a<4; a++) vSum[a] = 0.0;
   for(j=0; j<n; j++) {
     RandVec3(e,&seed);
+    for (a=0; a<3; a++) rv[j][a] = 0.0;
+    if (seedFrozen && ity[j]) continue;
     for (a=0; a<3; a++) {
       rv[j][a] = vMag*e[a];
       vSum[a] = vSum[a] + rv[j][a];
     }
+    vSum[3] += 1.0;
   }
-  MPI_Allreduce(vSum,gvSum,3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(vSum,gvSum,4,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
   /* Make the total momentum zero */
-  for (a=0; a<3; a++) gvSum[a] /= nglob;
-  for (j=0; j<n; j++)
+  for (a=0; a<3; a++) gvSum[a] /= gvSum[3];
+  for (j=0; j<n; j++) {
+    if (seedFrozen && ity[j]) continue;
     for(a=0; a<3; a++) rv[j][a] -= gvSum[a];
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -206,13 +261,69 @@ r & rv are propagated by DeltaT using the velocity-Verlet scheme.
 ----------------------------------------------------------------------*/
   int i,a;
 
+  seedFrozen = (RSeed > 0.0 && stepCount <= StepFreeze);
   half_kick(); /* First half kick to obtain v(t+Dt/2) */
-  for (i=0; i<n; i++) /* Update atomic coordinates to r(t+Dt) */
+  for (i=0; i<n; i++) { /* Update atomic coordinates to r(t+Dt) */
+    if (seedFrozen && ity[i]) continue;
     for (a=0; a<3; a++) r[i][a] = r[i][a] + DeltaT*rv[i][a];
+  }
   atom_move();
   atom_copy();
   compute_accel(); /* Computes new accelerations, a(t+Dt) */
   half_kick(); /* Second half kick to obtain v(t+Dt) */
+  if (Thermostat && stepCount <= StepMelt+StepQuench+StepHold)
+    thermostat();
+  if (RSeed > 0.0 && stepCount == StepFreeze+1) zero_momentum();
+}
+
+/*--------------------------------------------------------------------*/
+void zero_momentum() {
+/*----------------------------------------------------------------------
+Removes the center-of-mass velocity (used when the seed is released).
+----------------------------------------------------------------------*/
+  double loc[3],glb[3];
+  int i,a;
+  for (a=0; a<3; a++) loc[a] = 0.0;
+  for (i=0; i<n; i++) for (a=0; a<3; a++) loc[a] += rv[i][a];
+  MPI_Allreduce(loc,glb,3,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  for (i=0; i<n; i++) for (a=0; a<3; a++) rv[i][a] -= glb[a]/nglob;
+}
+
+/*--------------------------------------------------------------------*/
+double target_temp(int step) {
+/*----------------------------------------------------------------------
+Target temperature of the melt -> linear quench -> hold protocol.
+----------------------------------------------------------------------*/
+  if (step <= StepMelt) return TMelt;
+  if (step <= StepMelt+StepQuench)
+    return TMelt+(TQuench-TMelt)*(step-StepMelt)/(double)StepQuench;
+  return TQuench;
+}
+
+/*--------------------------------------------------------------------*/
+void thermostat() {
+/*----------------------------------------------------------------------
+Berendsen velocity rescaling toward target_temp(stepCount), using the
+global kinetic energy of the mobile atoms.  TauT = DeltaT gives plain
+velocity rescaling.
+----------------------------------------------------------------------*/
+  double loc[2],glb[2],vv,t,lam;
+  int i,a;
+
+  loc[0] = loc[1] = 0.0;
+  for (i=0; i<n; i++) {
+    if (seedFrozen && ity[i]) continue;
+    for (vv=0.0, a=0; a<3; a++) vv += rv[i][a]*rv[i][a];
+    loc[0] += 0.5*vv; loc[1] += 1.0;
+  }
+  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  t = 2.0*glb[0]/(3.0*glb[1]);
+  if (t <= 0.0) return;
+  lam = sqrt(1.0+DeltaT/TauT*(target_temp(stepCount)/t-1.0));
+  for (i=0; i<n; i++) {
+    if (seedFrozen && ity[i]) continue;
+    for (a=0; a<3; a++) rv[i][a] *= lam;
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -221,8 +332,10 @@ void half_kick() {
 Accelerates atomic velocities, rv, by half the time step.
 ----------------------------------------------------------------------*/
   int i,a;
-  for (i=0; i<n; i++)
+  for (i=0; i<n; i++) {
+    if (seedFrozen && ity[i]) continue;
     for (a=0; a<3; a++) rv[i][a] = rv[i][a]+DeltaTH*ra[i][a];
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -474,26 +587,32 @@ void eval_props() {
 /*----------------------------------------------------------------------
 Evaluates physical properties: kinetic, potential & total energies.
 ----------------------------------------------------------------------*/
-  double vv,lke;
+  double vv,loc[2],glb[2],pe;
   int i,a;
 
-  /* Total kinetic energy */
-  for (lke=0.0, i=0; i<n; i++) {
+  /* Total kinetic energy & # of mobile atoms */
+  loc[0] = loc[1] = 0.0;
+  for (i=0; i<n; i++) {
     for (vv=0.0, a=0; a<3; a++) vv += rv[i][a]*rv[i][a];
-    lke += vv;
+    loc[0] += 0.5*vv;
+    if (!(seedFrozen && ity[i])) loc[1] += 1.0;
   }
-  lke *= 0.5;
-  MPI_Allreduce(&lke,&kinEnergy,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(loc,glb,2,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 
-  /* Energy paer atom */
-  kinEnergy /= nglob;
-  potEnergy /= nglob;
-  totEnergy = kinEnergy + potEnergy;
-  temperature = kinEnergy*2.0/3.0;
+  /* Energy per atom */
+  kinEnergy = glb[0]/nglob;
+  pe = potEnergy/nglob;
+  totEnergy = kinEnergy + pe;
+  temperature = 2.0*glb[0]/(3.0*glb[1]);
 
   /* Print the computed properties */
-  if (sid == 0) printf("%9.6f %9.6f %9.6f %9.6f\n",
-                stepCount*DeltaT,temperature,potEnergy,totEnergy);
+  if (sid == 0) {
+    if (stepCount == 0) printf("#  step      time    Ttarget          T"
+                         "             PE             KE             TE\n");
+    printf("%7d %9.3f %10.6f %10.6f %14.8f %14.8f %14.8f\n",stepCount,
+           stepCount*DeltaT,Thermostat ? target_temp(stepCount) : 0.0,
+           temperature,pe,kinEnergy,totEnergy);
+  }
 }
 
 /*--------------------------------------------------------------------*/
@@ -671,6 +790,58 @@ int bmv(double* ri, int ku) {
     return ri[kd] < 0.0;
   else
     return al[kd] < ri[kd];
+}
+
+/*--------------------------------------------------------------------*/
+void write_xyz() {
+/*----------------------------------------------------------------------
+Gathers all resident atoms to rank 0, which writes an extended XYZ
+file <XYZPrefix>_<step>.xyz ordered by global ID.  Columns: ID, type
+(0 liquid/normal, 1 seed), x, y, z (global, in [0,L)), per-atom PE.
+----------------------------------------------------------------------*/
+  static double *loc=NULL,*all=NULL,*rbuf=NULL;
+  static int *cnt,*dsp;
+  int i,a,k,ntot;
+  char fname[512];
+  FILE *fp;
+
+  if (loc == NULL) {
+    loc = malloc(sizeof(double)*6*NMAX);
+    cnt = malloc(sizeof(int)*nproc); dsp = malloc(sizeof(int)*nproc);
+    if (sid == 0) {
+      all = malloc(sizeof(double)*6*nglob);
+      rbuf = malloc(sizeof(double)*6*nglob);
+    }
+  }
+  for (i=0; i<n; i++) {
+    loc[6*i] = gid[i]; loc[6*i+1] = ity[i];
+    for (a=0; a<3; a++) loc[6*i+2+a] = r[i][a]+vid[a]*al[a];
+    loc[6*i+5] = pea[i];
+  }
+  k = 6*n;
+  MPI_Gather(&k,1,MPI_INT,cnt,1,MPI_INT,0,MPI_COMM_WORLD);
+  if (sid == 0) for (dsp[0]=0, i=1; i<nproc; i++) dsp[i] = dsp[i-1]+cnt[i-1];
+  MPI_Gatherv(loc,k,MPI_DOUBLE,rbuf,cnt,dsp,MPI_DOUBLE,
+              0,MPI_COMM_WORLD);
+  if (sid != 0) return;
+
+  ntot = (dsp[nproc-1]+cnt[nproc-1])/6;
+  abort_if(ntot != nglob, "write_xyz: atom count mismatch");
+  for (i=0; i<ntot; i++) {
+    k = (int)rbuf[6*i];
+    for (a=0; a<6; a++) all[6*k+a] = rbuf[6*i+a];
+  }
+  sprintf(fname,"%s_%08d.xyz",XYZPrefix,stepCount);
+  fp = fopen(fname,"w");
+  abort_if(fp == NULL, "write_xyz: cannot open file");
+  fprintf(fp,"%d\nLattice=\"%.10f 0 0 0 %.10f 0 0 0 %.10f\" "
+          "Properties=id:I:1:type:I:1:pos:R:3:pe:R:1 Step=%d Time=%.4f\n",
+          nglob,vproc[0]*al[0],vproc[1]*al[1],vproc[2]*al[2],stepCount,
+          stepCount*DeltaT);
+  for (i=0; i<nglob; i++)
+    fprintf(fp,"%d %d %.8f %.8f %.8f %.8f\n",(int)all[6*i],(int)all[6*i+1],
+            all[6*i+2],all[6*i+3],all[6*i+4],all[6*i+5]);
+  fclose(fp);
 }
 
 /*--------------------------------------------------------------------*/

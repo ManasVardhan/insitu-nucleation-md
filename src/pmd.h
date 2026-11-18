@@ -156,6 +156,7 @@ void atom_copy();
 void compute_accel();
 double compute_accel_cpu(double (*f)[3], double *pe);
 void thermostat();
+void zero_momentum();
 double target_temp(int step);
 void eval_props();
 void atom_move();
