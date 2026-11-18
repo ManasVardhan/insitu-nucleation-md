@@ -1,0 +1,25 @@
+# T2.5 equivalence check: 2 SIM (GPU) + 1 ANA rank, N = 32000.
+# Production state point (rho* 0.95, T_q 0.70, seed R 4.5), short hold.
+# Analysis every 100 steps from step 6000; full-precision dumps at every
+# analysis step (InsituCheck 1) for src/posthoc.
+vproc       1 1 2
+InitUcell   20 20 10
+Density     0.95
+InitTemp    2.0
+DeltaT      0.005
+StepAvg     1000
+Thermostat  1
+TauT        0.1
+TMelt       2.0
+StepMelt    5000
+TQuench     0.70
+StepQuench  2000
+StepHold    10000
+RSeed       4.5
+StepRelease 1000
+InsituRanks 1
+InsituInterval 100
+InsituStart 6000
+InsituMovie 0
+InsituCheck 1
+InsituPrefix check
