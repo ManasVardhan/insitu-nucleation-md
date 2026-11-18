@@ -248,7 +248,12 @@ int steinhardt_compute(int n_total, const double *pos, const int *is_resident,
         FOR_NEIGHBORS(&cl, pos, i, rq2, { needed[j] = 1; (void)dx; (void)dy; (void)dz; });
     }
 
-    /* Pass 2: q_lm for needed atoms. */
+    /* Pass 2: q_lm for needed atoms. Passes 2 and 3 write only entry i, so
+     * they parallelize with OpenMP (if compiled with -fopenmp) without
+     * changing any result bit. */
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 512)
+#endif
     for (int i = 0; i < n_total; i++) {
         if (!needed[i]) continue;
         double *acc = &qlm[(size_t)i * NQLM];
@@ -265,6 +270,9 @@ int steinhardt_compute(int n_total, const double *pos, const int *is_resident,
     }
 
     /* Pass 3: q_l and Lechner-Dellago averages for residents. */
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 512)
+#endif
     for (int i = 0; i < n_total; i++) {
         if (!is_resident[i]) continue;
         const double *qi = &qlm[(size_t)i * NQLM];
