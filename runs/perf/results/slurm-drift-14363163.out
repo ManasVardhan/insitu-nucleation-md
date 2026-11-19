@@ -1,0 +1,6 @@
+perf drift job 14363163 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+off off N=1048576 P=4 ana=0 K=0 step_ms=30.3166 force_ms=17.4803 comm_ms=1.6792
+on on N=1048576 P=4 ana=4 K=100 step_ms=31.4236 force_ms=19.3367 comm_ms=1.8059
+done Wed Nov 18 21:45:09 PST 2026

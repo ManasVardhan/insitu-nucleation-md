@@ -28,6 +28,9 @@ HW = "debug node e23-02: 2x Tesla P100-PCIE-16GB, 2x Xeon E5-2640 v4 (10 cores e
 def load():
     fs = [f for f in glob.glob(os.path.join(RES, "*.csv")) if "smoke" not in f]
     df = pd.concat([pd.read_csv(f) for f in fs], ignore_index=True)
+    for c in df.columns:
+        if c not in ("exp", "config", "bin", "placement", "nodes", "gpu", "cpu", "jobid"):
+            df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
 
@@ -338,26 +341,32 @@ if len(ins):
                   "tmax": lambda v: "%.2f" % v, "stall": lambda v: "%.3f" % v}))
 
 # ---------------------------------------------------------------- step time drift
-wf = [f for f in glob.glob(os.path.join(RES, "drift_*.wall")) if "smoke" not in f]
+wf = [(f, "host-order threads") for f in glob.glob(os.path.join(RES, "drift_*.wall"))
+      if "smoke" not in f]
+wf += [(f, "cell-order threads") for f in glob.glob(os.path.join(RES, "sortfix_*.wall"))
+       if "smoke" not in f]
 if wf:
-    fig, ax = plt.subplots(figsize=(8, 3.8))
-    for f in sorted(wf):
+    fig, ax = plt.subplots(figsize=(8.5, 4.2))
+    for f, kern in sorted(wf, key=lambda x: (x[1] != "host-order threads", x[0])):
         tag = f.rsplit("_", 1)[1].split(".")[0]
         w = np.loadtxt(f, usecols=(1, 2, 3, 4))
         st, wall, fc = w[:, 0], w[:, 1], w[:, 2]
         dstep = np.diff(np.r_[0, st])
         ms = 1e3 * np.diff(np.r_[0, wall]) / dstep
         fms = 1e3 * np.diff(np.r_[0, fc]) / dstep
-        col = BLUE if tag == "off" else ORANGE
+        col = (BLUE if tag == "off" else ORANGE) if kern == "host-order threads" else \
+              (GREEN if tag == "off" else VERMILLION)
         ax.plot(st, ms, color=col, marker="o", ms=3,
-                label="analysis %s: step" % tag)
-        ax.plot(st, fms, color=col, ls=":", lw=1.5, label="analysis %s: force call" % tag)
-        print("drift", tag, "mean ms/step melt %.2f ramp %.2f hold %.2f" % (
-            ms[st <= 5000].mean(), ms[(st > 5000) & (st <= 7000)].mean(), ms[st > 7000].mean()))
+                label="%s, analysis %s: step" % (kern, tag))
+        ax.plot(st, fms, color=col, ls=":", lw=1.5, label="%s, analysis %s: force call" % (kern, tag))
+        print("drift", kern, tag, "mean ms/step melt %.2f ramp %.2f hold %.2f | force melt %.2f hold %.2f" % (
+            ms[st <= 5000].mean(), ms[(st > 5000) & (st <= 7000)].mean(), ms[st > 7000].mean(),
+            fms[st <= 5000].mean(), fms[st > 7000].mean()))
+    ax.set_ylim(0, ax.get_ylim()[1] * 1.08)
     for x, l in [(5000, "ramp"), (7000, "hold"), (8000, "release")]:
         ax.axvline(x, color=MUTED, lw=0.8, ls=":")
         ax.text(x, ax.get_ylim()[1], " " + l, fontsize=8, color=MUTED, va="top")
     ax.set_xlabel("MD step"); ax.set_ylabel("ms per step (500-step windows)")
-    ax.set_ylim(bottom=0); ax.legend(loc="lower right", fontsize=8, ncol=2)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), fontsize=8, ncol=2)
     title(ax, "Step time along the production protocol (N = 1,048,576, 4 SIM on 2 P100)")
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_step_time_drift.png")); plt.close(fig)
