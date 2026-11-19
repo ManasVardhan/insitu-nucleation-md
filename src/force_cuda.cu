@@ -3,7 +3,7 @@ force_cuda.cu: CUDA cell-list Lennard-Jones forces (double precision).
 
 Each call copies resident + cached coordinates to the device, bins them
 into the same (lc+2)^3 cell grid as the CPU path (cell sort with CUB),
-computes forces with one thread per resident atom over all neighbors
+computes forces with one thread per atom in cell order over all neighbors
 (no Newton's third law), and copies forces and per-atom PE back.
 Device buffers persist across calls and grow only when needed.
 ----------------------------------------------------------------------*/
@@ -71,21 +71,30 @@ coordinates into sorted order.
 }
 
 /*--------------------------------------------------------------------*/
-__global__ void lj_force(int n, const double *r, const double *rs,
+__global__ void lj_force(int nt, int n, const double *rs,
                          const int *vals, const int *cstart,
                          const int *cend, int3 lc2, double3 rc,
                          double rcut, double Uc, double Duc,
                          double *f, double *pe) {
 /*----------------------------------------------------------------------
-One thread per resident atom i: sums the force & half the pair energy
-over every atom j (resident or cached) within rcut.
+One thread per atom in cell-sorted order (thread s handles atom vals[s];
+cached atoms return at once): sums the force & half the pair energy of a
+resident atom over every atom j (resident or cached) within rcut.
+Assigning threads in sorted order keeps the atoms of a warp in the same
+or adjacent cells however the host array is ordered. With one thread per
+atom in host order, the force call slowed down from 10 to 19 ms at 262k
+atoms per rank as diffusion scrambled the initial lattice order. Each
+atom's sum runs over the same cells in the same order either way, so the
+forces are bit-identical.
 ----------------------------------------------------------------------*/
-  int i = blockIdx.x*blockDim.x+threadIdx.x, mc[3], m0, m1, m2, c1, k;
+  int s = blockIdx.x*blockDim.x+threadIdx.x, i, mc[3], m0, m1, m2, c1, k;
   double xi,yi,zi,dx,dy,dz,rr,ri2,ri6,r1,fcVal,fx,fy,fz,e,rrCut;
+  if (s >= nt) return;
+  i = vals[s];
   if (i >= n) return;
 
-  xi = r[3*i]; yi = r[3*i+1]; zi = r[3*i+2];
-  cell_index(&r[3*i],lc2,rc,mc);
+  xi = rs[3*s]; yi = rs[3*s+1]; zi = rs[3*s+2];
+  cell_index(&rs[3*s],lc2,rc,mc);
   rrCut = rcut*rcut;
   fx = fy = fz = e = 0.0;
 
@@ -97,7 +106,7 @@ over every atom j (resident or cached) within rcut.
         if (m2 < 0 || m2 >= lc2.z) continue;
         c1 = (m0*lc2.y+m1)*lc2.z+m2;
         for (k=cstart[c1]; k<cend[c1]; k++) {
-          if (vals[k] == i) continue;
+          if (k == s) continue;
           dx = xi-rs[3*k]; dy = yi-rs[3*k+1]; dz = zi-rs[3*k+2];
           rr = dx*dx+dy*dy+dz*dz;
           if (rr < rrCut) {
@@ -200,7 +209,7 @@ extern "C" double force_cuda(int n, int nb, const double *r, double *f,
 
   /* Forces on residents, D->H */
   if (n > 0) {
-    lj_force<<<(n+NTHREAD-1)/NTHREAD,NTHREAD>>>(n,d_r,d_rs,d_vals,d_cstart,
+    lj_force<<<nblk,NTHREAD>>>(nt,n,d_rs,d_vals,d_cstart,
         d_cend,lc2,rcv,rcut,Uc,Duc,d_f,d_pe);
     CUDA_CHECK(cudaGetLastError());
     CUDA_CHECK(cudaMemcpy(f,d_f,sizeof(double)*3*n,cudaMemcpyDeviceToHost));
