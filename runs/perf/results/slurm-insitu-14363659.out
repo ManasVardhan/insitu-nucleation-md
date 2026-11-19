@@ -1,0 +1,13 @@
+perf insitu job 14363659 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+off_r1 off N=1048576 P=4 ana=0 K=0 step_ms=25.1032 force_ms=11.5932 comm_ms=1.6683
+p1_r1 p1 N=1048576 P=4 ana=1 K=100 step_ms=31.2853 force_ms=12.9517 comm_ms=6.0270
+p2_r1 p2 N=1048576 P=4 ana=2 K=100 step_ms=26.1198 force_ms=11.8196 comm_ms=1.7693
+off_r2 off N=1048576 P=4 ana=0 K=0 step_ms=25.1063 force_ms=11.5264 comm_ms=1.6829
+p1_r2 p1 N=1048576 P=4 ana=1 K=100 step_ms=31.4987 force_ms=13.7785 comm_ms=6.2029
+p2_r2 p2 N=1048576 P=4 ana=2 K=100 step_ms=26.1111 force_ms=11.5720 comm_ms=1.7257
+off_r3 off N=1048576 P=4 ana=0 K=0 step_ms=25.0876 force_ms=13.9845 comm_ms=1.6490
+p1_r3 p1 N=1048576 P=4 ana=1 K=100 step_ms=31.3968 force_ms=13.9110 comm_ms=6.0645
+p2_r3 p2 N=1048576 P=4 ana=2 K=100 step_ms=26.0558 force_ms=13.4811 comm_ms=1.7384
+done Wed Nov 18 22:15:39 PST 2026

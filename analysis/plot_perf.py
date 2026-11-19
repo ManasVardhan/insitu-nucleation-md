@@ -268,7 +268,7 @@ if len(ins):
     ax.axhline(0, color=INK, lw=0.8)
     lab = [l.replace(", ANA on a 2nd node", "\nANA on 2nd node").replace(", P_ana", "\nP_ana")
            for l in B.run]
-    lab = [l + ("\n(job 2)" if j == "insitu_sep" and "2nd" not in l else "") for l, j in zip(lab, B.job)]
+    lab = [l + ("\n(other job)" if j == "insitu_sep" and "2nd" not in l else "") for l, j in zip(lab, B.job)]
     ax.set_xticks(x, lab, fontsize=8)
     ax.set_ylabel("SIM step time vs analysis off (%)")
     ax.set_ylim(min(-1, B.over.min() - 1), (B.over + B.over_err).max() * 1.35 + 1)
@@ -323,8 +323,11 @@ if len(ins):
             ax[0].errorbar(r.kstep, r.tana, yerr=r.tana_sd, marker=mk[r.P],
                            color=ORANGE if r.sep else cK[r.K], ms=8, capsize=2, ls="none",
                            mfc="white" if r.sep else None)
+            off_ = {(50, 4, False): (-9, 0, "right"), (100, 4, False): (9, -9, "left"),
+                    (100, 4, True): (-9, 9, "right"), (200, 4, False): (0, 10, "center")}.get(
+                        (int(r.K), int(r.P), bool(r.sep)), (9, 0, "left"))
             ax[0].annotate("K=%d, P_ana=%d%s" % (r.K, r.P, ", 2nd node" if r.sep else ""),
-                           (r.kstep, r.tana), xytext=(7, -3 if not r.sep else 6),
+                           (r.kstep, r.tana), xytext=off_[:2], ha=off_[2], va="center",
                            textcoords="offset points", fontsize=8, color=INK)
         lim = max(q.kstep.max(), q.tana.max()) * 1.25
         ax[0].plot([0, lim], [0, lim], color=MUTED, ls="--", lw=1)
