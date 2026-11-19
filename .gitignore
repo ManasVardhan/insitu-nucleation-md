@@ -4,3 +4,4 @@ reference/
 *.out
 __pycache__/
 .DS_Store
+viz/.venv/
