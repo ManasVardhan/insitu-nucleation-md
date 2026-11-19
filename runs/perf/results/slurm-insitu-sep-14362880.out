@@ -1,0 +1,38 @@
+perf insitu_sep job 14362880 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+het group 0: e23-02, group 1: d05-41
+off_r1 off N=1048576 P=4 ana=0 K=0 step_ms=25.0763 force_ms=11.6835 comm_ms=1.6510
+same_r1 k100_same N=1048576 P=4 ana=4 K=100 step_ms=26.0719 force_ms=11.5105 comm_ms=1.7549
+sep_r1 k100_sep N=1048576 P=4 ana=4 K=100 step_ms=25.2364 force_ms=14.0399 comm_ms=1.6629
+INSITU_ANA rank 0 (world 4) serves 1 SIM ranks from 0
+INSITU_ANA rank 1 (world 5) serves 1 SIM ranks from 1
+INSITU_ANA rank 2 (world 6) serves 1 SIM ranks from 2
+INSITU_ANA rank 3 (world 7) serves 1 SIM ranks from 3
+local rank 1 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 3 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 2 -> GPU 0 (Tesla P100-PCIE-16GB)
+local rank 0 -> GPU 0 (Tesla P100-PCIE-16GB)
+off_r2 off N=1048576 P=4 ana=0 K=0 step_ms=25.1186 force_ms=11.6875 comm_ms=1.6767
+same_r2 k100_same N=1048576 P=4 ana=4 K=100 step_ms=25.9871 force_ms=12.6197 comm_ms=1.7652
+sep_r2 k100_sep N=1048576 P=4 ana=4 K=100 step_ms=25.1406 force_ms=11.5020 comm_ms=1.6680
+INSITU_ANA rank 0 (world 4) serves 1 SIM ranks from 0
+INSITU_ANA rank 1 (world 5) serves 1 SIM ranks from 1
+INSITU_ANA rank 2 (world 6) serves 1 SIM ranks from 2
+INSITU_ANA rank 3 (world 7) serves 1 SIM ranks from 3
+local rank 0 -> GPU 0 (Tesla P100-PCIE-16GB)
+local rank 3 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 1 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 2 -> GPU 0 (Tesla P100-PCIE-16GB)
+off_r3 off N=1048576 P=4 ana=0 K=0 step_ms=25.1924 force_ms=11.8902 comm_ms=1.6555
+same_r3 k100_same N=1048576 P=4 ana=4 K=100 step_ms=26.1043 force_ms=14.4244 comm_ms=1.7766
+sep_r3 k100_sep N=1048576 P=4 ana=4 K=100 step_ms=25.1530 force_ms=11.5433 comm_ms=1.6764
+INSITU_ANA rank 0 (world 4) serves 1 SIM ranks from 0
+INSITU_ANA rank 1 (world 5) serves 1 SIM ranks from 1
+INSITU_ANA rank 2 (world 6) serves 1 SIM ranks from 2
+INSITU_ANA rank 3 (world 7) serves 1 SIM ranks from 3
+local rank 3 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 0 -> GPU 0 (Tesla P100-PCIE-16GB)
+local rank 1 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 2 -> GPU 0 (Tesla P100-PCIE-16GB)
+done Wed Nov 18 21:24:20 PST 2026
