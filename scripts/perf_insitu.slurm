@@ -18,7 +18,7 @@
 # 1500 steps (3000 steps), no movie. Cases are interleaved over REPS reps.
 source scripts/perf_lib.sh insitu
 export OMP_NUM_THREADS=2 OMP_PROC_BIND=close OMP_PLACES=cores
-RUN_TMO=${RUN_TMO:-360}
+RUN_TMO=${RUN_TMO:-600}
 REPS=${REPS:-3}; SM=1000; SQ=500; SH=1500
 if [ "${SMOKE:-0}" = 1 ]; then REPS=1; SM=100; SQ=50; SH=150; fi
 [ $# -eq 0 ] && set -- off:0:0 k100:100:4

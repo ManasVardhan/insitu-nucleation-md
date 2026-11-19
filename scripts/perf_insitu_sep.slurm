@@ -14,7 +14,7 @@
 # Same input as perf_insitu.slurm (K = 100, P_ana = 4, 2 threads per ANA).
 source scripts/perf_lib.sh insitu_sep
 export OMP_NUM_THREADS=2 OMP_PROC_BIND=close OMP_PLACES=cores
-RUN_TMO=${RUN_TMO:-360}
+RUN_TMO=${RUN_TMO:-600}
 REPS=${REPS:-3}; SM=1000; SQ=500; SH=1500
 if [ "${SMOKE:-0}" = 1 ]; then REPS=1; SM=100; SQ=50; SH=150; fi
 I=$PERF_OUT/in; mkdir -p $I

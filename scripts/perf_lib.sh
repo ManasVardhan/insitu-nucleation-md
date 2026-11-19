@@ -47,11 +47,25 @@ mk_seeded() {
 run() {
   local tag=$1 cfg=$2 bin=$3 rep=$4 in=$5; shift 5
   local d=$PERF_OUT/$tag; mkdir -p $d; cp $in $d/run.in
-  local L=$d/run.log T="" try
-  # A launch occasionally hangs in MPI startup (seen once in MPI_Comm_split):
-  # each attempt is killed after RUN_TMO s, and a failed run is retried once.
-  for try in 1 2; do
-    ( cd $d && timeout -s INT ${RUN_TMO:-900} "$@" $PERF_ROOT/src/$bin run.in > run.log 2>&1 )
+  local L=$d/run.log T="" try pid t
+  # A launch sometimes hangs in MPI startup (rank 0 stops in MPI_Comm_split;
+  # 2 of the first 3 in situ job starts). Watchdog: if "nglob =" (printed
+  # after the split and the GPU setup) is not in the log after START_TMO s,
+  # or the run exceeds RUN_TMO s, srun gets two SIGINTs (which abort the
+  # step) and the run is retried, up to 3 attempts.
+  for try in 1 2 3; do
+    ( cd $d && exec "$@" $PERF_ROOT/src/$bin run.in > run.log 2>&1 ) &
+    pid=$!; t=0
+    while kill -0 $pid 2>/dev/null; do
+      sleep 5; t=$((t+5))
+      if { [ $t -ge ${START_TMO:-120} ] && ! grep -q '^nglob' $L; } || [ $t -ge ${RUN_TMO:-900} ]; then
+        echo "KILL $tag attempt $try after $t s"
+        kill -INT $pid; sleep 0.3; kill -INT $pid; sleep 40
+        kill -0 $pid 2>/dev/null && kill -KILL $pid
+        break
+      fi
+    done
+    wait $pid 2>/dev/null
     T=$(grep '^TIMING' $L)
     [ -n "$T" ] && break
     echo "FAILED $tag (attempt $try)"; tail -3 $L; cp $L $d/failed_$try.log
