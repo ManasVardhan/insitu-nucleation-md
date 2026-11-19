@@ -86,7 +86,12 @@ int main(int argc, char **argv) {
   comt = fct = 0.0;
   for (stepCount=1; stepCount<=StepLimit; stepCount++) {
     single_step(); 
-    if (stepCount%StepAvg == 0) eval_props();
+    if (stepCount%StepAvg == 0) {
+      eval_props();
+      /* cumulative wall, force and MD comm time (s) since the loop start */
+      if (sid == 0) printf("WALL %d %.4f %.4f %.4f\n",stepCount,
+                           MPI_Wtime()-cpu1,fct,comt);
+    }
     if (XYZInterval > 0 && stepCount%XYZInterval == 0) write_xyz();
 #ifdef USE_CUDA
     if (ForceCheck > 0 && stepCount%ForceCheck == 0) force_check();

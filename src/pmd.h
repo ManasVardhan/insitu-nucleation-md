@@ -19,8 +19,9 @@ RCUT = Potential cut-off length
 MOVED_OUT: Signifies a moved-out resident atom in function atom_move.
 EMPTY: Signifies the end of a linked list.
 ----------------------------------------------------------------------*/
-#define NMAX 500000
-#define NEMAX 1000000
+/* sized for ~1.1M residents on one rank (one GPU at N ~ 1M) */
+#define NMAX 1200000
+#define NEMAX 2000000
 #define NDBUF 2000000
 #define NBMAX 250000
 #define NCLMAX 500000
