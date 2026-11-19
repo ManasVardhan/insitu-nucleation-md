@@ -55,7 +55,7 @@ and wrote **46x fewer bytes** than a full dump at the same frequency (13x with t
 separate check the in situ labels agree exactly with a post hoc analysis of a full dump (0 mismatches
 in 7.1 million atom labels). With 4 ANA ranks the analysis never stalls the simulation: it adds
 **+5.2 ± 1.1%** (about 1 ms) to the step time when it shares the GPU node, and **+0.2 ± 0.3%** (within
-noise) when it runs on a separate node. One P100 is **33 to 43x** faster than one CPU core but only
+noise) when it runs on a separate node (the separate-node test used the original kernel). One P100 is **33 to 43x** faster than one CPU core but only
 **2.4 to 3.4x** faster than the full 20-core node. Whether the analysis keeps up is decided by the
 number of analysis ranks relative to the MD time between analysis steps, not by the neural network,
 which is about 3% of the per-atom analysis cost (0.06 of 1.9 µs per atom on one core).
@@ -109,9 +109,9 @@ halo of two neighbor shells (section 3.3).
 ### 2.4 Machine-learning classifiers for local structure
 
 A single threshold on q̄6 works well for bulk FCC versus liquid, but the boundary becomes ambiguous
-at interfaces and with several crystal structures. Neural networks on bond-order features were
-proposed for this by Geiger and Dellago [10], and later work learned the structure directly from
-neighbor coordinates [11]. Here the classifier is deliberately small (386 parameters) so that it can
+at interfaces and with several crystal structures. Neural networks on symmetry-function descriptors of the
+neighborhood were proposed for this by Geiger and Dellago [10], and later work learned the structure directly from
+neighbor coordinates [11]. Here the classifier is deliberately small (402 parameters) so that it can
 run in plain C inside the MPI job, and it is always compared with the q̄6 threshold baseline.
 
 ---
@@ -229,7 +229,7 @@ points, T ∈ {0.45, 0.55, 0.65, 0.75} x ρ ∈ {0.90, 0.95, 1.00} (279,936 atom
 6 state points *between* the training grid values, T ∈ {0.50, 0.60, 0.70} x ρ ∈ {0.925, 0.975}
 (139,968 atoms), so no test state point is seen in training. Crystal/liquid slabs (49,152 atoms) are
 used only for evaluation at an interface. Features come from the same `steinhardt.c` that runs in
-situ. The model is an MLP 5 → 16 → 16 → 2 with ReLU (386 parameters), trained in PyTorch in about
+situ. The model is an MLP 5 → 16 → 16 → 2 with ReLU (402 parameters), trained in PyTorch in about
 5 s and exported to a C header; inference is a hand-written C forward pass that matches PyTorch to
 1.8e-15 with 0 label mismatches on 2000 samples. The baseline is a single threshold q̄6 > 0.308 fitted
 on the training set. Details: [docs/classifier.md](docs/classifier.md).
@@ -298,7 +298,7 @@ The released seed grows steadily and is still growing when the run ends. After t
 cube root of n_max (a radius) grows almost linearly, so the interface moves at a roughly constant
 speed and n_max grows like t³, not exponentially. No
 other nucleus forms: the second-largest cluster never exceeds 34 atoms (MLP). The q̄6 threshold always
-finds a 5 to 17% larger cluster, and the slab movie shows where the surplus sits: on the crystal
+finds a larger cluster (5 to 23% larger from t = 100 on, up to 30% just after the seed release), and the slab movie shows where the surplus sits: on the crystal
 surface and at internal defects between lobes, which matches the interface bias measured in the
 classifier evaluation.
 

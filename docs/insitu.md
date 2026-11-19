@@ -214,8 +214,8 @@ removes the drift and gives 18.7 instead of 31.8 ms per step in the hold, with b
   452,021 by the threshold, and it is still growing at the end. Growth is slow for the first
   ~10k hold steps and then speeds up as the surface grows. In this box the crystal does not reach
   its periodic images until late. In the 108k-atom box it filled half the box by 40k to 60k hold steps.
-- **Both label sets agree on the shape of n_max(t).** The threshold cluster is 5 to 15% larger
-  throughout. Nearly every crystalline atom belongs to the largest cluster (n_crystal - n_max is a
+- **Both label sets agree on the shape of n_max(t).** The threshold cluster is larger
+  throughout: 5 to 23% from t = 100 on, up to 30% just after the seed release. Nearly every crystalline atom belongs to the largest cluster (n_crystal - n_max is a
   few hundred atoms), so the extra threshold atoms sit on the crystal surface: the q̄6 threshold
   calls more interface atoms crystalline than the MLP does, consistent with `docs/classifier.md`.
 - **No spontaneous nucleation.** After the seed release, the second-largest cluster never exceeds

@@ -281,7 +281,7 @@ analysis step (`bytes_insitu`, `bytes_fulldump` in the summary). The movie snaps
 | of which movie snapshots (every 1000 steps, float32) | 1.32 GB | |
 
 The label file costs 0.518 bytes per atom per analysis step on average over this run (5 bytes per
-crystalline atom; the crystal grows to 43% of the box), against 24 bytes for the dump. The right
+crystalline atom; the crystal grows to 41% (MLP) or 43% (q̄6) of the box), against 24 bytes for the dump. The right
 panel extrapolates to a 100,000-step run with the measured label size:
 
 | N | K | Full dump | In situ, with movie | In situ, labels only |
@@ -330,7 +330,7 @@ run of T3.1: N = 1,048,576, 4 SIM ranks on the 2 P100 of e23-02, 4 ANA ranks, K 
   nucleus forms: the second-largest cluster never exceeds
   34 (MLP) or 43 atoms (threshold), see `docs/insitu.md`.
 - **The two label sets agree on the shape of the curve; the threshold always finds a larger cluster**
-  (5 to 17% more atoms). The relative gap shrinks as the crystal grows because the surplus sits on the
+  (5 to 23% more atoms from t = 100 on, up to 30% just after the seed release). The relative gap shrinks as the crystal grows because the surplus sits on the
   surface and at internal defects (see the slab movie), and the surface-to-volume ratio falls.
 - The first point (t = 0.5, n_max of 819 and 5% crystalline) is the initial FCC lattice before it
   melts, not nucleation.
@@ -364,7 +364,7 @@ for 3 video frames at 24 fps (12 s).
   periodic images across the box faces (the yellow sheets at the box edge in the last still).
 - In the slab, the q̄6-threshold-only atoms (orange) sit on the crystal surface and inside the
   crystal at defects and grain boundaries between lobes, while MLP-only atoms (green) are rare. This
-  is the 5 to 17% surplus of the threshold n_max seen in the n_max(t) plot.
+  is the surplus of the threshold n_max seen in the n_max(t) plot.
 - The grey specks in view A are single atoms or small groups that the MLP calls crystalline away from
   the seed: transient fluctuations, which the cluster search correctly leaves out of n_max.
 

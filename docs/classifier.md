@@ -92,7 +92,7 @@ To regenerate it, run `sh train/gen_all.sh`.
 
 ## 3. Model (`train/train.py`)
 
-- **Architecture.** MLP 5 → 16 → 16 → 2 with ReLU, 386 parameters. Inputs are standardized with the
+- **Architecture.** MLP 5 → 16 → 16 → 2 with ReLU, 402 parameters. Inputs are standardized with the
   training-set mean and std.
 - **Training.** Cross-entropy, Adam (lr 3e-3, cosine schedule), batch 1024, 30 epochs, seed 0, CPU.
   It takes about 5 s.
