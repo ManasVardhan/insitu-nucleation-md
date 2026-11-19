@@ -524,11 +524,14 @@ sbatch scripts/perf_speedup.slurm                     # CPU vs GPU vs N
 sbatch scripts/perf_scaling.slurm                     # strong and weak scaling, 1 node
 sbatch scripts/perf_insitu.slurm off:0:0 k100:100:4 k50:50:4 k200:200:4   # tag:K:P_ana
 sbatch scripts/perf_insitu_sep.slurm                  # ANA on the GPU node vs a separate node
-sbatch scripts/perf_drift.slurm; sbatch scripts/perf_sortfix.slurm; sbatch scripts/perf_mixed.slurm
+sbatch scripts/perf_drift.slurm                       # step time along the production protocol
+OLD=<dir with a pre-9d1a074 src/pmd_cuda> sbatch scripts/perf_sortfix.slurm   # old vs new kernel
+OLD=<same> sbatch scripts/perf_mixed.slurm            # solid vs liquid (MELT=1), both kernels
 sbatch scripts/perf_scaling_multi.slurm               # 1 to 8 V100 over 4 nodes (gpu partition)
 ```
 
-`SMOKE=1 sbatch ...` runs a tiny version of each first.
+`SMOKE=1 sbatch ...` runs a tiny version of the `perf_*` jobs first. The results reported here
+are in `runs/perf/results/`; files with `_cellorder` in the name were measured after the kernel fix.
 
 **Training data and classifier** (locally; Python with PyTorch, NumPy, pandas, matplotlib):
 
