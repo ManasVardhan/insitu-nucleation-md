@@ -7,20 +7,26 @@ by `analysis/plot_perf.py` (performance), `analysis/plot_io.py` (I/O), and `anal
 
 ## Key numbers
 
-| Measurement | Result (P100 debug node, N = 1,048,576 unless noted) |
-|---|---|
-| GPU vs CPU, 1 P100 vs 1 core | 29 to 38x (N = 32k to 864k, solid) |
-| GPU vs CPU, 1 P100 vs the 20-core node | 2.1 to 3.1x (solid); in a liquid at N = 256k: 2.0x (original kernel), 3.0x (fixed kernel) |
-| GPU vs CPU, 2 P100 vs the 20-core node | 3.5 to 5.1x (solid); liquid at 256k: 3.5x (original), 4.9x (fixed) |
-| Strong scaling, 1 to 2 P100 | 1.73x (efficiency 0.87); 4 ranks on the 2 P100: 2.25x |
-| Strong scaling, CPU path, 1 to 20 cores (N = 256k) | 13.7x (0.68) |
-| Weak scaling | 0.77 on 2 P100 (262k atoms/GPU); 0.74 on 20 cores (32k atoms/core) |
-| In situ overhead, ANA on the GPU node, P_ana = 4 | +5.6 ± 0.2% (K = 50), +4.0 ± 0.4% (K = 100), +3.0 ± 0.2% (K = 200); stall 0 |
-| In situ overhead, ANA on a separate node, K = 100 | +0.2 ± 0.3% |
-| In situ overhead, P_ana = 1, K = 100 | +25.2 ± 0.5%: analysis (3.08 s) longer than K x step, SIM ranks stall |
-| I/O, production run (974 analysis steps) | 1.85 GB in situ (0.53 GB without movie) vs 24.5 GB full dump: 13x (46x) less |
-| Force kernel fix (threads in cell order) | bit-identical forces; production protocol 31.8 to 18.7 ms per step in the hold (1.7x), no drift |
-| Science | seed grows from about 600 atoms to 428,505 (MLP) / 452,021 (q̄6) in 97,400 steps; no other nucleus |
+The speedup, one-node scaling and K = 100 in situ overhead were remeasured with the cell-order force
+kernel (commit 9d1a074; jobs 14364484, 14364485, 14364486, files with the suffix `_cellorder`).
+The original-kernel values are in the last column. The K and P_ana sweeps, the separate-node test
+and the production run used the original kernel only.
+
+| Measurement | Result, cell-order kernel (P100 debug node, N = 1,048,576 unless noted) | Before the fix (original kernel) |
+|---|---|---|
+| GPU vs CPU, 1 P100 vs 1 core | 33 to 43x (N = 32k to 864k, solid) | 29 to 38x |
+| GPU vs CPU, 1 P100 vs the 20-core node | 2.4 to 3.4x (solid); in a liquid at N = 256k: 3.0x | 2.1 to 3.1x; liquid 2.0x |
+| GPU vs CPU, 2 P100 vs the 20-core node | 4.2 to 5.5x (solid); liquid at 256k: 4.9x | 3.5 to 5.1x; liquid 3.5x |
+| Strong scaling, 1 to 2 P100 | 51.73 to 30.50 ms, 1.70x (efficiency 0.85); 4 ranks on the 2 P100: 23.58 ms, 2.19x | 58.52 to 33.78 ms, 1.73x (0.87); 25.97 ms, 2.25x |
+| Strong scaling, CPU path, 1 to 20 cores (N = 256k) | 13.8x (0.69) | 13.7x (0.68) |
+| Weak scaling | 0.73 on 2 P100 (262k atoms/GPU); 0.75 on 20 cores (32k atoms/core) | 0.77; 0.74 |
+| In situ overhead, ANA on the GPU node, K = 100, P_ana = 4 | +5.2 ± 1.1% (0.97 ms of 18.61 ms); stall 0 | +4.0 ± 0.4% (0.99 ms of 25.08 ms) |
+| In situ overhead vs K, ANA on the GPU node, P_ana = 4 | not remeasured | +5.6 ± 0.2% (K = 50), +3.0 ± 0.2% (K = 200); stall 0 |
+| In situ overhead, ANA on a separate node, K = 100 | not remeasured | +0.2 ± 0.3% |
+| In situ overhead, P_ana = 1, K = 100 | not remeasured | +25.2 ± 0.5%: analysis (3.08 s) longer than K x step, SIM ranks stall |
+| I/O, production run (974 analysis steps) | 1.85 GB in situ (0.53 GB without movie) vs 24.5 GB full dump: 13x (46x) less | (kernel-independent) |
+| Force kernel fix (threads in cell order) | bit-identical forces; production protocol 18.7 ms per step in the hold, no drift | 31.8 ms in the hold, after a drift from 22.8 ms |
+| Science (production run, original kernel) | seed grows from about 600 atoms to 428,505 (MLP) / 452,021 (q̄6) in 97,400 steps; no other nucleus | (energies identical with either kernel) |
 
 ## Hardware actually used
 
@@ -47,7 +53,9 @@ Error bars and the ± values are the sample standard deviation over repeated run
 
 ## 1. GPU speedup: CPU force path vs CUDA force path
 
-`scripts/perf_speedup.slurm`, job 14362860. The global box is the same for every layout:
+`scripts/perf_speedup.slurm`, job 14364484 with the cell-order force kernel
+(`runs/perf/results/speedup_14364484_cellorder.csv`); the original-kernel job 14362860 is kept in
+`speedup_14362860.csv` and summarized at the end of this section. The global box is the same for every layout:
 10k x 10k x 10k FCC unit cells, N = 4000 k^3, ρ* = 0.95, NVE from the lattice with InitTemp 2.0
 (which relaxes to a hot solid at T of about 1, see section 8).
 GPU runs 500 steps, multi-core CPU runs 200, single-core runs 30 to 100.
@@ -58,31 +66,41 @@ Time per MD step (ms), mean of the repeats:
 
 | N | CPU 1 core | CPU 10 cores | CPU 20 cores | 1 P100 | 2 P100 | 1 P100 vs 1 core | 1 P100 vs node | 2 P100 vs node |
 |---|---|---|---|---|---|---|---|---|
-| 32,000 | 56.40 | 8.70 | 4.59 | 1.74 | 1.33 | 32.5x | 2.6x | 3.5x |
-| 108,000 | 171.98 | 27.48 | 14.67 | 4.77 | 3.01 | 36.1x | 3.1x | 4.9x |
-| 256,000 | 413.71 | 59.03 | 30.58 | 10.99 | 6.02 | 37.6x | 2.8x | 5.1x |
-| 500,000 | 769.64 | 112.74 | 56.13 | 23.92 | 11.55 | 32.2x | 2.3x | 4.9x |
-| 864,000 | 1355.56 | 201.98 | 99.37 | 46.65 | 21.69 | 29.1x | 2.1x | 4.6x |
+| 32,000 | 56.32 | 8.73 | 4.61 | 1.56 | 1.11 | 36.0x | 2.9x | 4.2x |
+| 108,000 | 171.98 | 27.49 | 14.65 | 4.33 | 2.76 | 39.7x | 3.4x | 5.3x |
+| 256,000 | 413.85 | 58.70 | 30.43 | 9.67 | 5.54 | 42.8x | 3.1x | 5.5x |
+| 500,000 | 772.32 | 112.59 | 56.09 | 21.68 | 10.39 | 35.6x | 2.6x | 5.4x |
+| 864,000 | 1358.82 | 201.85 | 99.41 | 41.86 | 19.67 | 32.5x | 2.4x | 5.1x |
 
-- **One P100 is 29 to 38x faster than one core**, consistent with the earlier 31x at 131k atoms.
-- **The fair comparison is against the whole node: one P100 is only 2.1 to 3.1x faster than all 20
-  cores, and both P100 together are 3.5 to 5.1x faster.** Each MPI rank drives one GPU, so the GPU
+- **One P100 is 33 to 43x faster than one core.**
+- **The fair comparison is against the whole node: one P100 is only 2.4 to 3.4x faster than all 20
+  cores, and both P100 together are 4.2 to 5.5x faster.** Each MPI rank drives one GPU, so the GPU
   build uses 1 or 2 of the 20 cores.
 - **The host is the bottleneck.** Only the force computation runs on the GPU, and the rest of the
-  step (integration, halo exchange packing, atom migration, all on one core per rank) is 48 to 60% of
-  the 1-GPU step and grows faster than the force part: 0.84 of 1.74 ms at 32k atoms, 28.2 of 46.7 ms
+  step (integration, halo exchange packing, atom migration, all on one core per rank) is 53 to 67% of
+  the 1-GPU step and grows faster than the force part: 0.83 of 1.56 ms at 32k atoms, 28.2 of 41.9 ms
   at 864k. The force call itself, including the host-device copies of positions and forces, takes
-  21 to 28 ns per atom. This is why the GPU-to-node speedup falls at large N, and it is the obvious
+  16 to 23 ns per atom. This is why the GPU-to-node speedup falls at large N, and it is the obvious
   next optimization (device-resident positions and integration).
 - Per-rank numbers (1 core vs 1 GPU) and all repeats are in the CSV; the run-to-run spread is below
-  1% everywhere.
+  1.2% everywhere.
 - These runs stay solid (section 8): the speedups hold for a solid with atoms in lattice order. In
   the liquid the original kernel loses a third of its speed, and the fixed kernel does not
   (section 8, "CPU vs GPU in a solid and in a liquid").
 
+**Before the fix** (job 14362860, original host-order kernel, same script): 1 P100 took 1.74, 4.77,
+10.99, 23.92 and 46.65 ms at the five sizes and 2 P100 took 1.33, 3.01, 6.02, 11.55 and 21.69 ms, that is
+29 to 38x one core, 2.1 to 3.1x the 20-core node with one P100 and 3.5 to 5.1x with two. The force
+call took 21 to 28 ns per atom and the host part was 48 to 60% of the 1-GPU step. The CPU columns
+of the two jobs agree to 0.6%. Even in the solid, where the old kernel does not drift, the cell-order
+kernel is 8 to 17% faster per step (1 P100: 9 to 12%), because the cell-sorted order fits the cell loop better than the
+lattice order.
+
 ## 2. Strong scaling
 
-`scripts/perf_scaling.slurm`, job 14362861. GPU path: 1 and 2 P100 at N = 256,000 and 1,048,576
+`scripts/perf_scaling.slurm`, job 14364485 with the cell-order force kernel
+(`runs/perf/results/scaling_14364485_cellorder.csv`; the original-kernel job 14362861 is in
+`scaling_14362861.csv`). GPU path: 1 and 2 P100 at N = 256,000 and 1,048,576
 (300 steps). CPU path: 1 to 20 cores at N = 256,000 (100 steps, 2 repeats). Ranks are packed onto
 socket 0 first (`--distribution=block:block`), so 8 ranks fill most of one socket and 16 and 20 use
 both.
@@ -91,56 +109,66 @@ both.
 
 | run | P | step ms | std | speedup | efficiency |
 |---|---|---|---|---|---|
-| CPU path, N = 256,000 | 1 | 415.29 | 0.15 | 1.00 | 1.00 |
-| CPU path, N = 256,000 | 2 | 225.14 | 0.17 | 1.84 | 0.92 |
-| CPU path, N = 256,000 | 4 | 126.50 | 0.26 | 3.28 | 0.82 |
-| CPU path, N = 256,000 | 8 | 75.19 | 0.02 | 5.52 | 0.69 |
-| CPU path, N = 256,000 | 16 | 38.05 | 0.01 | 10.91 | 0.68 |
-| CPU path, N = 256,000 | 20 | 30.38 | 0.19 | 13.67 | 0.68 |
-| GPU path, N = 256,000 | 1 | 10.87 | 0.04 | 1.00 | 1.00 |
-| GPU path, N = 256,000 | 2 | 6.55 | 0.06 | 1.66 | 0.83 |
-| GPU path, N = 1,048,576 | 1 | 58.52 | 0.06 | 1.00 | 1.00 |
-| GPU path, N = 1,048,576 | 2 | 33.78 | 0.04 | 1.73 | 0.87 |
-| GPU path, N = 1,048,576, 4 ranks on 2 P100 | 4 | 25.97 | 0.15 | 2.25 | 0.56 |
+| CPU path, N = 256,000 | 1 | 416.86 | 0.29 | 1.00 | 1.00 |
+| CPU path, N = 256,000 | 2 | 224.84 | 0.57 | 1.85 | 0.93 |
+| CPU path, N = 256,000 | 4 | 126.34 | 0.16 | 3.30 | 0.82 |
+| CPU path, N = 256,000 | 8 | 75.37 | 0.53 | 5.53 | 0.69 |
+| CPU path, N = 256,000 | 16 | 38.01 | 0.00 | 10.97 | 0.69 |
+| CPU path, N = 256,000 | 20 | 30.29 | 0.10 | 13.76 | 0.69 |
+| GPU path, N = 256,000 | 1 | 9.69 | 0.09 | 1.00 | 1.00 |
+| GPU path, N = 256,000 | 2 | 6.08 | 0.01 | 1.60 | 0.80 |
+| GPU path, N = 1,048,576 | 1 | 51.73 | 0.21 | 1.00 | 1.00 |
+| GPU path, N = 1,048,576 | 2 | 30.50 | 0.20 | 1.70 | 0.85 |
+| GPU path, N = 1,048,576, 4 ranks on 2 P100 | 4 | 23.58 | 0.11 | 2.19 | 0.55 |
 
-The last row has 4 ranks on the same 2 GPUs. The efficiency column divides by ranks (0.56); per
-GPU it is 2.25 / 2 = 1.12, above 1 because the host work is spread over 4 cores instead of 2.
+The last row has 4 ranks on the same 2 GPUs. The efficiency column divides by ranks (0.55); per
+GPU it is 2.19 / 2 = 1.10, above 1 because the host work is spread over 4 cores instead of 2.
 
-- **2 P100 give 1.66x (N = 256k) and 1.73x (N = 1M)**, an efficiency of 0.83 to 0.87. The force call
-  halves exactly (22.97 to 11.97 ms at 1M), but the host part and the halo exchange do not.
-- **4 ranks on the same 2 P100 are faster still: 25.97 ms vs 33.78 ms (2.25x over 1 GPU).** Two
+- **2 P100 give 1.60x (N = 256k) and 1.70x (N = 1M)**, an efficiency of 0.80 to 0.85. The force call
+  halves (16.31 to 8.66 ms at 1M), but the host part (33.4 to 19.5 ms) and the halo exchange
+  (2.05 to 2.32 ms) do not scale as well.
+- **4 ranks on the same 2 P100 are faster still: 23.58 ms vs 30.50 ms (2.19x over 1 GPU).** Two
   ranks share each GPU, so the host work is spread over 4 cores while the GPUs overlap the two
   ranks' kernels. This is the layout of the production run. It confirms that host work, not the GPU,
   limits the step.
-- **CPU path: 13.7x on 20 cores (efficiency 0.68).** The efficiency drops between 4 and 8 ranks and
+- **CPU path: 13.8x on 20 cores (efficiency 0.69).** The efficiency drops between 4 and 8 ranks and
   then stays flat to 20. MPI communication is below 1 ms per step throughout, so the loss is not
   parallel overhead but per-core slowdown when many cores of one socket are busy, most likely a lower
-  turbo clock and shared L3 and memory bandwidth (inferred, not measured). The weak-scaling runs below show the same effect directly.
+  turbo clock and shared L3 and memory bandwidth (inferred, not measured). The weak-scaling runs below
+  show the same effect directly.
+
+**Before the fix** (job 14362861): 58.52 ms on 1 P100 and 33.78 ms on 2 at N = 1M (1.73x, efficiency
+0.87), 25.97 ms with 4 ranks on the 2 P100 (2.25x); at N = 256k 10.87 and 6.55 ms (1.66x). The fix
+makes every GPU step 7 to 12% faster but the relative scaling slightly worse, because only the
+force call got faster and the host share, which scales worse, grew. The CPU path (no GPU kernel)
+agrees with the earlier job to 0.5% (13.67x on 20 cores then).
 
 ## 3. Weak scaling
 
-Same job. GPU path: 262,144 atoms per P100 (1 and 2 GPUs). CPU path: 32,000 atoms per core
+Same jobs. GPU path: 262,144 atoms per P100 (1 and 2 GPUs). CPU path: 32,000 atoms per core
 (1 to 20 cores).
 
 ![Weak scaling](img/perf_weak_scaling.png)
 
 | run | P | N | step ms | std | efficiency |
 |---|---|---|---|---|---|
-| CPU path, 32,000 atoms/core | 1 | 32,000 | 56.50 | 0.04 | 1.00 |
-| CPU path, 32,000 atoms/core | 2 | 64,000 | 59.47 | 0.03 | 0.95 |
-| CPU path, 32,000 atoms/core | 4 | 128,000 | 64.81 | 0.14 | 0.87 |
-| CPU path, 32,000 atoms/core | 8 | 256,000 | 75.32 | 0.02 | 0.75 |
-| CPU path, 32,000 atoms/core | 16 | 512,000 | 75.73 | 0.04 | 0.75 |
-| CPU path, 32,000 atoms/core | 20 | 640,000 | 75.86 | 0.04 | 0.74 |
-| GPU path, 262,144 atoms/GPU | 1 | 262,144 | 11.24 | 0.11 | 1.00 |
-| GPU path, 262,144 atoms/GPU | 2 | 524,288 | 14.60 | 0.03 | 0.77 |
+| CPU path, 32,000 atoms/core | 1 | 32,000 | 56.63 | 0.03 | 1.00 |
+| CPU path, 32,000 atoms/core | 2 | 64,000 | 59.46 | 0.16 | 0.95 |
+| CPU path, 32,000 atoms/core | 4 | 128,000 | 64.73 | 0.18 | 0.87 |
+| CPU path, 32,000 atoms/core | 8 | 256,000 | 75.20 | 0.07 | 0.75 |
+| CPU path, 32,000 atoms/core | 16 | 512,000 | 76.10 | 0.47 | 0.74 |
+| CPU path, 32,000 atoms/core | 20 | 640,000 | 75.88 | 0.26 | 0.75 |
+| GPU path, 262,144 atoms/GPU | 1 | 262,144 | 9.96 | 0.08 | 1.00 |
+| GPU path, 262,144 atoms/GPU | 2 | 524,288 | 13.61 | 0.08 | 0.73 |
 
-- **CPU path: efficiency 0.95 at 2 cores, 0.75 at 8, and flat at 0.74 to 20 cores.** The force time
-  per rank rises from 55.7 to 73 ms with the same atoms per core and MD communication stays at
-  0.2 to 1.0 ms, so this is the same per-socket slowdown as above. Once a socket is busy, adding the
-  second socket costs nothing, which is what weak scaling across nodes would look like too.
-- **GPU path: 0.77 on 2 P100** (11.24 to 14.60 ms). The force call is unchanged (5.4 ms), and the
-  loss is in the host part (5.1 to 7.7 ms) and the halo exchange (0.7 to 1.5 ms).
+- **CPU path: efficiency 0.95 at 2 cores, 0.75 at 8, and flat at 0.74 to 0.75 to 20 cores.** The
+  per-core slowdown seen in strong scaling, with the same atoms per core and MD communication below
+  1 ms. Once a socket is busy, adding the second socket costs nothing, which is what weak scaling
+  across nodes would look like too.
+- **GPU path: 0.73 on 2 P100** (9.96 to 13.61 ms). The force call is unchanged (4.17 to 4.23 ms), and
+  the loss is in the host part (5.1 to 7.9 ms) and the halo exchange (0.69 to 1.45 ms).
+- **Before the fix** (job 14362861): 11.24 to 14.60 ms, efficiency 0.77, with a force call of 5.4 ms.
+  As in strong scaling, the faster kernel makes the host share, and so the loss, relatively larger.
 
 ## 4. In situ overhead
 
@@ -152,6 +180,24 @@ as in the production run. Each configuration ran 3 times, interleaved with the o
 job, so slow drifts of the node affect all configurations alike. The overhead is the SIM step time
 (`TIMING step_ms` of SIM rank 0, which includes every wait) against the mean of the off runs of
 the same job.
+
+**With the cell-order kernel** (job 14364486, `runs/perf/results/insitu_14364486_cellorder.csv`,
+K = 100, P_ana = 4, ANA ranks on the GPU node, 3 interleaved repeats):
+
+| Configuration | n | SIM ms/step | vs off | t_analysis mean / max (s) | K x step time (s) | SIM stall (s) | SIM halo + pack (ms/step) |
+|---|---|---|---|---|---|---|---|
+| analysis off | 3 | 18.61 ± 0.19 | | | | | |
+| K = 100, P_ana = 4 | 3 | 19.58 ± 0.06 | **+5.2 ± 1.1%** | 0.84 / 0.86 | 1.96 | 0 | 0.075 |
+
+The analysis costs the SIM ranks 0.97 ms per step, the same as with the original kernel (0.99 ms
+at K = 100, below), but the step is 26% shorter, so the same cost is a larger fraction: +5.2% instead
+of +4.0%. The larger error bar comes from one off run (18.83 ms against 18.52 and 18.48). The
+analysis still fits easily: t_analysis is 0.84 s against 1.96 s of MD between analysis steps (ratio
+0.43, was 0.31), with zero stall. Everything else in this section (the K and P_ana sweeps and the
+separate-node test) was measured with the original kernel; since the absolute cost did not change,
+those conclusions carry over, but the percentages would be about 1.35x larger with the faster step.
+
+The rest of this section: original host-order kernel (jobs 14363611, 14363659, 14362880).
 
 ![In situ overhead](img/perf_insitu_overhead.png)
 
@@ -357,11 +403,14 @@ production protocol with a `WALL` line (cumulative wall, force and MD communicat
   37 ms in the hold) was not reproduced in these 15,000-step runs. Candidates are the analysis load
   that grows with the crystal (t_analysis 1.1 to 2.5 s on cores shared with the SIM ranks) and the
   movie snapshots (every 1000 steps, not used in these runs). Not measured.
-- **All measurements in sections 1 to 4 used the original kernel.** The speedup and scaling runs are
-  NVE runs that stay solid, and in a solid there is no drift (next subsection), so they are
-  steady-state numbers for a solid. The in situ overhead runs (3000 steps of the melt protocol) are
-  all at the same point of the drift, so their on/off differences are fair, but their absolute step
-  times (25 ms) are below the hold-phase plateau (32 ms).
+- **Sections 1 to 4 were first measured with the original kernel**, and the speedup, the one-node
+  scaling and the K = 100, P_ana = 4 in situ overhead were then rerun with the cell-order kernel
+  (jobs 14364484, 14364485, 14364486; the `_cellorder` files). Sections 1 to 4 now report the new
+  numbers and keep the old ones in "before the fix" notes. The original-kernel speedup and scaling
+  runs are NVE runs that stay solid, and in a solid there is no drift (next subsection), so they are
+  steady-state numbers for a solid. The original-kernel in situ runs (3000 steps of the melt
+  protocol) are all at the same point of the drift, so their on/off differences are fair, but their
+  absolute step times (25 ms) are below the hold-phase plateau (32 ms).
 
 ### CPU vs GPU in a solid and in a liquid
 
@@ -403,8 +452,10 @@ Last 500 steps, ms per step (speedup over the 20-core CPU path):
   `analysis/plot_perf.py`, which adds the multi-node series. For the A100 run:
   `analysis/plot_science.py runs/production/out/prod_summary.dat runs/production/prod.in docs/img/nmax_a100.png "A100 run" --second runs/production/results/p100/prod_summary.dat "P100 run"`.
 - **Step-time drift of the force kernel** (section 8): found, explained and fixed. The fix landed
-  after the measurements, so sections 1 to 4 and the production run use the original kernel. The
-  multi-node job and the A100 production job also use binaries built before the fix.
+  after the first measurements; the speedup, one-node scaling and K = 100 in situ overhead were
+  rerun with it, while the K and P_ana sweeps, the separate-node test and the production run use the
+  original kernel. The multi-node job and the A100 production job also use binaries built before the
+  fix.
 - **The NVE speedup and scaling runs stay solid** (FCC at InitTemp 2.0 relaxes to T of about 1 at
   ρ* = 0.95), so they measure both paths with atoms in lattice order. The thermostatted melt runs in
   section 8 give the numbers for a liquid.
