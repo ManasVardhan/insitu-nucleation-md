@@ -1,0 +1,18 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf insitu job 14364486 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+off_r1 off N=1048576 P=4 ana=0 K=0 step_ms=18.5225 force_ms=5.7274 comm_ms=1.6955
+k100_r1 k100 N=1048576 P=4 ana=4 K=100 step_ms=19.5731 force_ms=7.7047 comm_ms=1.7710
+off_r2 off N=1048576 P=4 ana=0 K=0 step_ms=18.8345 force_ms=6.1969 comm_ms=1.6533
+k100_r2 k100 N=1048576 P=4 ana=4 K=100 step_ms=19.6404 force_ms=5.7946 comm_ms=1.7637
+off_r3 off N=1048576 P=4 ana=0 K=0 step_ms=18.4804 force_ms=5.9824 comm_ms=1.6937
+k100_r3 k100 N=1048576 P=4 ana=4 K=100 step_ms=19.5175 force_ms=8.0123 comm_ms=1.7621
+done Wed Nov 18 23:29:31 PST 2026

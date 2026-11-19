@@ -304,7 +304,8 @@ if len(ins):
                  ("2nd node" if "2nd node" in l else ("P" if "P_ana=4" not in l else "K")))
                 for l, j in zip(B.run, B.job)]
     B["key"] = B.run.map({k: i for i, k in enumerate(order)})
-    B = B.sort_values(["job", "key"])
+    B["jo"] = B.job.map({"insitu": 0, "insitu_sep": 1, "insitu_cell": 2})
+    B = B.sort_values(["jo", "key"])
     fig, ax = plt.subplots(figsize=(10, 4.4))
     x = np.arange(len(B))
     cmap_ = {"K": BLUE, "P": GREEN, "2nd node": ORANGE, "cell": VERMILLION}
@@ -331,7 +332,7 @@ if len(ins):
     ax.legend(loc="upper right", fontsize=8)
     title(ax, "In situ overhead on the SIM ranks (N = 1,048,576, 4 SIM ranks on 2 P100)")
     note(fig, "3000 steps (melt, quench, seeded hold), every rank on 2 cores, 2 OpenMP threads per ANA "
-         "rank, 3 runs each. All bars but the last: original force kernel.\nBaseline: mean of the off runs of the same job. Error bars: "
+         "rank, 3 runs each. Red bar: cell-order force kernel; all others: original kernel.\nBaseline: mean of the off runs of the same job. Error bars: "
          "sample std propagated from both. Off: %s ms." % ", ".join(
              "%.2f +- %.2f" % (a_, b_) for a_, b_ in R[R.run == "off"][["step", "std"]].values))
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_insitu_overhead.png")); plt.close(fig)
@@ -377,9 +378,9 @@ if len(ins):
                     (100, 4, True): (-9, 9, "right"), (200, 4, False): (0, 10, "center")}.get(
                         (int(r.K), int(r.P), bool(r.sep)), (9, 0, "left"))
             if r.cell:
-                off_ = (9, 0, "left")
+                off_ = (0, -20, "center")
             ax[0].annotate("K=%d, P_ana=%d%s%s" % (r.K, r.P, ", 2nd node" if r.sep else "",
-                                                   ", cell-order kernel" if r.cell else ""),
+                                                   ",\ncell-order kernel" if r.cell else ""),
                            (r.kstep, r.tana), xytext=off_[:2], ha=off_[2], va="center",
                            textcoords="offset points", fontsize=8, color=INK)
         lim = max(q.kstep.max(), q.tana.max()) * 1.25
@@ -405,7 +406,8 @@ if len(ins):
              "(error bars: std over repeats). Right: the 97,400-step production run.")
         fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_analysis_time.png")); plt.close(fig)
         print("\n### analysis time vs K x step\n")
-        print(md(q, [("K", "K"), ("P_ana", "P"), ("2nd node", "sep"), ("K x step (s)", "kstep"),
+        print(md(q, [("K", "K"), ("P_ana", "P"), ("2nd node", "sep"), ("cell-order kernel", "cell"),
+                     ("K x step (s)", "kstep"),
                      ("t_analysis mean (s)", "tana"), ("t_analysis max (s)", "tmax"),
                      ("stall total (s)", "stall")],
                  {"kstep": lambda v: "%.2f" % v, "tana": lambda v: "%.2f" % v,
