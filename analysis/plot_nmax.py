@@ -1,8 +1,10 @@
-"""Plot n_max(t) and the crystalline count from an in situ summary.
+"""Plot n_max(t) for both label sets from an in situ summary.
 
-    python analysis/plot_nmax.py runs/production/prod_summary.dat out.png [t_hold0]
+    python analysis/plot_nmax.py <prefix>_summary.dat out.png [t_hold0 [t_release]]
 
-t_hold0 (optional) marks the start of the hold (reduced time).
+Left: largest crystalline cluster n_max(t). Right: second-largest cluster,
+which would reveal spontaneous nuclei away from the seed. Optional vertical
+markers at the start of the hold and the seed release (reduced time).
 """
 import sys
 
@@ -13,19 +15,34 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from insitu_read import read_summary  # noqa: E402
 
+INK, MUTED, GRID = "#1f1f1e", "#6b6a63", "#e4e3dd"
+SERIES = [("mlp", "MLP", "#2a78d6", "-"), ("thr", "q̄6 > 0.308", "#eb6834", "--")]
+
 s = read_summary(sys.argv[1])
-fig, ax = plt.subplots(1, 2, figsize=(10, 3.8))
-for key, lab, c in [("mlp", "MLP", "#2a6fdb"), ("thr", r"$\bar q_6 > 0.308$", "#e07b39")]:
-    ax[0].plot(s["time"], s["nmax_" + key], color=c, label=lab)
-    ax[1].plot(s["time"], s["n_crystal_" + key], color=c, label=lab)
-    ax[1].plot(s["time"], s["n2_" + key], color=c, ls=":", lw=1,
-               label=lab + ", 2nd largest cluster")
-for a, t in zip(ax, ["largest crystalline cluster $n_{max}$", "crystalline atoms"]):
-    a.set_xlabel("time (LJ units)")
-    a.set_title(t)
-    a.set_yscale("log")
-    if len(sys.argv) > 3:
-        a.axvline(float(sys.argv[3]), color="gray", lw=0.8, ls="--")
-    a.legend(frameon=False, fontsize=8)
+marks = [float(x) for x in sys.argv[3:5]]
+plt.rcParams.update({"font.size": 9, "text.color": INK, "axes.labelcolor": INK,
+                     "xtick.color": MUTED, "ytick.color": MUTED})
+fig, axes = plt.subplots(1, 2, figsize=(10, 3.8))
+for ax, col, title in [(axes[0], "nmax_", "Largest crystalline cluster, n_max"),
+                       (axes[1], "n2_", "Second-largest cluster")]:
+    for key, lab, c, ls in SERIES:
+        y = s[col + key]
+        ax.plot(s["time"], y, color=c, lw=2 if col == "nmax_" else 1.2, ls=ls, label=lab)
+        if col == "nmax_":
+            ax.annotate(f"{lab}  {int(y[-1]):,}", (s["time"][-1], y[-1]),
+                        xytext=(-4, 4 if key == "thr" else -6), textcoords="offset points",
+                        ha="right", va="top" if key == "mlp" else "bottom", fontsize=8, color=INK)
+    for t in marks:
+        ax.axvline(t, color=MUTED, lw=0.8, ls=":")
+    ax.set_yscale("log" if col == "nmax_" else "linear")
+    ax.set_xlabel("time (LJ units)")
+    ax.set_ylabel("atoms")
+    ax.set_title(title, loc="left", fontsize=10)
+    ax.grid(True, color=GRID, lw=0.6)
+    for sp in ("top", "right"):
+        ax.spines[sp].set_visible(False)
+    for sp in ("left", "bottom"):
+        ax.spines[sp].set_color(GRID)
+    ax.legend(frameon=False, fontsize=8, loc="upper left")
 fig.tight_layout()
-fig.savefig(sys.argv[2], dpi=130)
+fig.savefig(sys.argv[2], dpi=140)

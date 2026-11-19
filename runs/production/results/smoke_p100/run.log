@@ -1,0 +1,26 @@
+Protocol: thermostat 1 tau 0.1 | melt 2 x 1000 | ramp 500 | hold 0.7 x 2500 | nve 0 | total 4000
+Seed: R 4.5 frozen through step 2000
+al = 5.167281e+01 5.167281e+01 1.033456e+02
+lc = 20 20 41
+rc = 2.583641e+00 2.583641e+00 2.520625e+00
+Insitu: SIM 4 ANA 4 K 100 start 0 steps 40 movie 10 check 0
+INSITU_ANA rank 0 (world 4) serves 1 SIM ranks from 0
+INSITU_ANA rank 1 (world 5) serves 1 SIM ranks from 1
+INSITU_ANA rank 2 (world 6) serves 1 SIM ranks from 2
+INSITU_ANA rank 3 (world 7) serves 1 SIM ranks from 3
+local rank 2 -> GPU 0 (Tesla P100-PCIE-16GB)
+local rank 3 -> GPU 1 (Tesla P100-PCIE-16GB)
+local rank 0 -> GPU 0 (Tesla P100-PCIE-16GB)
+local rank 1 -> GPU 1 (Tesla P100-PCIE-16GB)
+nglob = 1048576
+nseed = 369
+#  step      time    Ttarget          T             PE             KE             TE
+      0     0.000   2.000000   1.999999    -6.38149475     2.99894237    -3.38255238
+   1000     5.000   2.000000   2.000179    -3.34345678     2.99921279    -0.34424398
+   2000    10.000   0.700000   0.700394    -4.92285586     1.05022091    -3.87263495
+   3000    15.000   0.700000   0.700152    -4.93665702     1.05022764    -3.88642938
+   4000    20.000   0.700000   0.700028    -4.93594917     1.05004157    -3.88590760
+INSITU_SIM sends 40 stall_total 0.0000 stall_max 0.0000 final_wait 0.0030 halo_total 0.2476 pack_total 0.0499 (max over SIM)
+CPU & COMT = 1.057341e+02 7.052066e+00
+TIMING nglob 1048576 nproc 4 steps 4000 wall 105.7341 step_ms 26.4335 force_ms 14.4297 comm_ms 1.7630
+INSITU_ANA steps 40 t_analysis_total 33.668 mean 0.8417 max 0.9785 t_feat_max 0.8511 bytes_insitu 55016629 bytes_fulldump 1006634240 ratio 18.3
