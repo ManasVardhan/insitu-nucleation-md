@@ -1,0 +1,82 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf speedup job 14364484 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+gpu1_N32000_r1 gpu1 N=32000 P=1 ana=0 K=0 step_ms=1.5660 force_ms=0.7344 comm_ms=0.1475
+gpu2_N32000_r1 gpu2 N=32000 P=2 ana=0 K=0 step_ms=1.1009 force_ms=0.5291 comm_ms=0.2257
+cpu20_N32000_r1 cpu20 N=32000 P=20 ana=0 K=0 step_ms=4.5906 force_ms=4.1128 comm_ms=0.2439
+cpu10_N32000_r1 cpu10 N=32000 P=10 ana=0 K=0 step_ms=8.8080 force_ms=8.1880 comm_ms=0.1974
+cpu1_N32000_r1 cpu1 N=32000 P=1 ana=0 K=0 step_ms=56.3893 force_ms=55.6019 comm_ms=0.1444
+gpu1_N108000_r1 gpu1 N=108000 P=1 ana=0 K=0 step_ms=4.3281 force_ms=1.9502 comm_ms=0.3244
+gpu2_N108000_r1 gpu2 N=108000 P=2 ana=0 K=0 step_ms=2.7542 force_ms=1.2108 comm_ms=0.4572
+cpu20_N108000_r1 cpu20 N=108000 P=20 ana=0 K=0 step_ms=14.6464 force_ms=13.6167 comm_ms=0.3251
+cpu10_N108000_r1 cpu10 N=108000 P=10 ana=0 K=0 step_ms=27.4213 force_ms=26.2639 comm_ms=0.3402
+cpu1_N108000_r1 cpu1 N=108000 P=1 ana=0 K=0 step_ms=171.9827 force_ms=169.6234 comm_ms=0.3200
+gpu1_N256000_r1 gpu1 N=256000 P=1 ana=0 K=0 step_ms=9.6963 force_ms=4.1765 comm_ms=0.6202
+gpu2_N256000_r1 gpu2 N=256000 P=2 ana=0 K=0 step_ms=5.5191 force_ms=2.2742 comm_ms=0.7738
+cpu20_N256000_r1 cpu20 N=256000 P=20 ana=0 K=0 step_ms=30.5024 force_ms=29.0750 comm_ms=0.5269
+cpu10_N256000_r1 cpu10 N=256000 P=10 ana=0 K=0 step_ms=58.7466 force_ms=56.4586 comm_ms=0.7566
+cpu1_N256000_r1 cpu1 N=256000 P=1 ana=0 K=0 step_ms=413.6980 force_ms=408.0371 comm_ms=0.6592
+gpu1_N500000_r1 gpu1 N=500000 P=1 ana=0 K=0 step_ms=21.8262 force_ms=7.9753 comm_ms=1.2085
+gpu2_N500000_r1 gpu2 N=500000 P=2 ana=0 K=0 step_ms=10.3426 force_ms=4.2406 comm_ms=1.3154
+cpu20_N500000_r1 cpu20 N=500000 P=20 ana=0 K=0 step_ms=55.9841 force_ms=53.8252 comm_ms=0.9162
+cpu10_N500000_r1 cpu10 N=500000 P=10 ana=0 K=0 step_ms=112.5738 force_ms=108.3765 comm_ms=1.3738
+cpu1_N500000_r1 cpu1 N=500000 P=1 ana=0 K=0 step_ms=772.4392 force_ms=758.7807 comm_ms=1.2163
+gpu1_N864000_r1 gpu1 N=864000 P=1 ana=0 K=0 step_ms=41.9919 force_ms=13.6650 comm_ms=1.7961
+gpu2_N864000_r1 gpu2 N=864000 P=2 ana=0 K=0 step_ms=19.7151 force_ms=7.1363 comm_ms=2.0333
+cpu20_N864000_r1 cpu20 N=864000 P=20 ana=0 K=0 step_ms=98.9397 force_ms=95.5446 comm_ms=1.3572
+cpu10_N864000_r1 cpu10 N=864000 P=10 ana=0 K=0 step_ms=202.0041 force_ms=191.4688 comm_ms=2.0719
+cpu1_N864000_r1 cpu1 N=864000 P=1 ana=0 K=0 step_ms=1359.8866 force_ms=1331.5185 comm_ms=1.8532
+gpu1_N32000_r2 gpu1 N=32000 P=1 ana=0 K=0 step_ms=1.5599 force_ms=0.7300 comm_ms=0.1465
+gpu2_N32000_r2 gpu2 N=32000 P=2 ana=0 K=0 step_ms=1.1083 force_ms=0.5303 comm_ms=0.2282
+cpu20_N32000_r2 cpu20 N=32000 P=20 ana=0 K=0 step_ms=4.6081 force_ms=4.1162 comm_ms=0.2566
+cpu10_N32000_r2 cpu10 N=32000 P=10 ana=0 K=0 step_ms=8.7181 force_ms=8.0794 comm_ms=0.1945
+cpu1_N32000_r2 cpu1 N=32000 P=1 ana=0 K=0 step_ms=56.2485 force_ms=55.4617 comm_ms=0.1445
+gpu1_N108000_r2 gpu1 N=108000 P=1 ana=0 K=0 step_ms=4.3316 force_ms=1.9511 comm_ms=0.3255
+gpu2_N108000_r2 gpu2 N=108000 P=2 ana=0 K=0 step_ms=2.7611 force_ms=1.2101 comm_ms=0.4621
+cpu20_N108000_r2 cpu20 N=108000 P=20 ana=0 K=0 step_ms=14.6510 force_ms=13.6215 comm_ms=0.3288
+cpu10_N108000_r2 cpu10 N=108000 P=10 ana=0 K=0 step_ms=27.4007 force_ms=26.2889 comm_ms=0.3346
+cpu1_N108000_r2 cpu1 N=108000 P=1 ana=0 K=0 step_ms=171.9842 force_ms=169.6190 comm_ms=0.3204
+gpu1_N256000_r2 gpu1 N=256000 P=1 ana=0 K=0 step_ms=9.6381 force_ms=4.1656 comm_ms=0.6197
+gpu2_N256000_r2 gpu2 N=256000 P=2 ana=0 K=0 step_ms=5.5716 force_ms=2.2781 comm_ms=0.7812
+cpu20_N256000_r2 cpu20 N=256000 P=20 ana=0 K=0 step_ms=30.4632 force_ms=29.4445 comm_ms=0.5282
+cpu10_N256000_r2 cpu10 N=256000 P=10 ana=0 K=0 step_ms=58.6788 force_ms=56.4892 comm_ms=0.7454
+cpu1_N256000_r2 cpu1 N=256000 P=1 ana=0 K=0 step_ms=413.9958 force_ms=408.2786 comm_ms=0.6607
+gpu1_N500000_r2 gpu1 N=500000 P=1 ana=0 K=0 step_ms=21.8439 force_ms=7.9664 comm_ms=1.2077
+gpu2_N500000_r2 gpu2 N=500000 P=2 ana=0 K=0 step_ms=10.4825 force_ms=4.2403 comm_ms=1.3121
+cpu20_N500000_r2 cpu20 N=500000 P=20 ana=0 K=0 step_ms=55.9760 force_ms=53.8889 comm_ms=0.9088
+cpu10_N500000_r2 cpu10 N=500000 P=10 ana=0 K=0 step_ms=112.6737 force_ms=108.4336 comm_ms=1.3605
+cpu1_N500000_r2 cpu1 N=500000 P=1 ana=0 K=0 step_ms=772.2011 force_ms=758.4833 comm_ms=1.2421
+gpu1_N864000_r2 gpu1 N=864000 P=1 ana=0 K=0 step_ms=41.9019 force_ms=13.6489 comm_ms=1.7740
+gpu2_N864000_r2 gpu2 N=864000 P=2 ana=0 K=0 step_ms=19.7633 force_ms=7.1247 comm_ms=2.0295
+cpu20_N864000_r2 cpu20 N=864000 P=20 ana=0 K=0 step_ms=99.0787 force_ms=95.4777 comm_ms=1.4634
+cpu10_N864000_r2 cpu10 N=864000 P=10 ana=0 K=0 step_ms=201.9677 force_ms=191.3564 comm_ms=2.0759
+cpu1_N864000_r2 cpu1 N=864000 P=1 ana=0 K=0 step_ms=1357.7585 force_ms=1329.5252 comm_ms=1.8350
+gpu1_N32000_r3 gpu1 N=32000 P=1 ana=0 K=0 step_ms=1.5618 force_ms=0.7314 comm_ms=0.1468
+gpu2_N32000_r3 gpu2 N=32000 P=2 ana=0 K=0 step_ms=1.1071 force_ms=0.5269 comm_ms=0.2242
+cpu20_N32000_r3 cpu20 N=32000 P=20 ana=0 K=0 step_ms=4.6183 force_ms=4.1154 comm_ms=0.2347
+cpu10_N32000_r3 cpu10 N=32000 P=10 ana=0 K=0 step_ms=8.6703 force_ms=8.0934 comm_ms=0.1957
+gpu1_N108000_r3 gpu1 N=108000 P=1 ana=0 K=0 step_ms=4.3382 force_ms=1.9524 comm_ms=0.3242
+gpu2_N108000_r3 gpu2 N=108000 P=2 ana=0 K=0 step_ms=2.7628 force_ms=1.2113 comm_ms=0.4613
+cpu20_N108000_r3 cpu20 N=108000 P=20 ana=0 K=0 step_ms=14.6464 force_ms=13.6304 comm_ms=0.3218
+cpu10_N108000_r3 cpu10 N=108000 P=10 ana=0 K=0 step_ms=27.6406 force_ms=26.3065 comm_ms=0.3365
+gpu1_N256000_r3 gpu1 N=256000 P=1 ana=0 K=0 step_ms=9.6821 force_ms=4.1315 comm_ms=0.6453
+gpu2_N256000_r3 gpu2 N=256000 P=2 ana=0 K=0 step_ms=5.5291 force_ms=2.3379 comm_ms=0.7760
+cpu20_N256000_r3 cpu20 N=256000 P=20 ana=0 K=0 step_ms=30.3302 force_ms=29.0239 comm_ms=0.5404
+cpu10_N256000_r3 cpu10 N=256000 P=10 ana=0 K=0 step_ms=58.6781 force_ms=56.4458 comm_ms=0.7456
+gpu1_N500000_r3 gpu1 N=500000 P=1 ana=0 K=0 step_ms=21.3843 force_ms=7.6905 comm_ms=1.1924
+gpu2_N500000_r3 gpu2 N=500000 P=2 ana=0 K=0 step_ms=10.3465 force_ms=4.2401 comm_ms=1.2973
+cpu20_N500000_r3 cpu20 N=500000 P=20 ana=0 K=0 step_ms=56.2983 force_ms=53.7990 comm_ms=0.9212
+cpu10_N500000_r3 cpu10 N=500000 P=10 ana=0 K=0 step_ms=112.5190 force_ms=108.3589 comm_ms=1.3422
+gpu1_N864000_r3 gpu1 N=864000 P=1 ana=0 K=0 step_ms=41.6933 force_ms=13.6627 comm_ms=1.7794
+gpu2_N864000_r3 gpu2 N=864000 P=2 ana=0 K=0 step_ms=19.5317 force_ms=7.1232 comm_ms=2.0497
+cpu20_N864000_r3 cpu20 N=864000 P=20 ana=0 K=0 step_ms=100.2118 force_ms=95.4927 comm_ms=1.3334
+cpu10_N864000_r3 cpu10 N=864000 P=10 ana=0 K=0 step_ms=201.5645 force_ms=191.2821 comm_ms=2.1317
+done Wed Nov 18 23:09:47 PST 2026
