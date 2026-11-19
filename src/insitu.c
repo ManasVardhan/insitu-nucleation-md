@@ -168,6 +168,7 @@ void insitu_ana_run(const insitu_cfg *c, MPI_Comm ana) {
   size_t rcap = 0,ccap = 0,ncap = 0,fcap = 0,mcap = 0;
   long long bytes = 0,fullbytes = 0;
   double t0,t1,trecv,tfeat,tgat,tclus,tio,tana,tsum = 0.0,tmax = 0.0,tfmax = 0.0;
+  double twall0;
   double hl[6],hg[6];
   int ncl,ncr = 0;
   cluster_info im,it;
@@ -177,6 +178,7 @@ void insitu_ana_run(const insitu_cfg *c, MPI_Comm ana) {
 
   MPI_Comm_rank(ana,&me); MPI_Comm_size(ana,&np);
   MPI_Comm_rank(MPI_COMM_WORLD,&wme);
+  twall0 = MPI_Wtime();
   if (np != c->nana) die("ANA comm size != InsituRanks");
 
   /* My SIM sources: s*nana/nsim == me */
@@ -198,7 +200,7 @@ void insitu_ana_run(const insitu_cfg *c, MPI_Comm ana) {
     k = snprintf(row,sizeof(row),
       "# step time n_crystal_mlp n_crystal_thr nmax_mlp nmax_thr t_analysis "
       "t_stall bytes_insitu | n2_mlp n2_thr nbig_mlp nbig_thr t_feat t_clus_io "
-      "t_recvwait t_simhalo t_simpack bytes_fulldump\n"
+      "t_recvwait t_simhalo t_simpack bytes_fulldump t_wall\n"
       "# nsim %d nana %d K %d nglob %d rq %g thr %g clusmin %d nsteps %d\n",
       c->nsim,c->nana,c->interval,c->nglob,c->rq,c->thr,c->clusmin,nst);
     fputs(row,fsum); bytes += k;
@@ -410,9 +412,9 @@ void insitu_ana_run(const insitu_cfg *c, MPI_Comm ana) {
         for (;;) { /* row length depends on the digits of b2 */
           k = snprintf(row,sizeof(row),
             "%d %.4f %d %d %d %d %.6f %.6f %lld | %d %d %d %d %.6f %.6f %.6f "
-            "%.6f %.6f %lld\n",step,step*c->dt,nm,nt,im.nmax,it.nmax,tana,hg[0],
+            "%.6f %.6f %lld %.3f\n",step,step*c->dt,nm,nt,im.nmax,it.nmax,tana,hg[0],
             b2,im.n2,it.n2,im.nbig,it.nbig,hg[3],tclus+tio,hg[5],hg[1],hg[2],
-            fullbytes);
+            fullbytes,MPI_Wtime()-twall0);
           if (bytes+k == b2) break;
           b2 = bytes+k;
         }

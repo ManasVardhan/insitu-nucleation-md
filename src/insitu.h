@@ -20,7 +20,8 @@ SIM -> ANA message (MPI_DOUBLE, tag INSITU_TAG, on MPI_COMM_WORLD):
 
 Output files (prefix = InsituPrefix), all little-endian binary except the
 summary:
-  <prefix>_summary.dat   one text row per analysis step (see header line)
+  <prefix>_summary.dat   one text row per analysis step (see header line);
+                         t_wall = seconds since the ANA ranks started
   <prefix>_labels.bin    per analysis step: int32 step, int32 count,
                          int32 id[count] (ascending), uint8 bits[count]
                          for crystalline atoms only (either label set)

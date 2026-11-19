@@ -13,7 +13,7 @@ import numpy as np
 SUMMARY_COLS = ["step", "time", "n_crystal_mlp", "n_crystal_thr", "nmax_mlp",
                 "nmax_thr", "t_analysis", "t_stall", "bytes_insitu", "n2_mlp",
                 "n2_thr", "nbig_mlp", "nbig_thr", "t_feat", "t_clus_io",
-                "t_recvwait", "t_simhalo", "t_simpack", "bytes_fulldump"]
+                "t_recvwait", "t_simhalo", "t_simpack", "bytes_fulldump", "t_wall"]
 
 
 def read_summary(path):
@@ -23,8 +23,11 @@ def read_summary(path):
             if line.startswith("#"):
                 continue
             rows.append([float(x) for x in line.replace("|", " ").split()])
-    a = np.array(rows).reshape(-1, len(SUMMARY_COLS))
-    return {c: a[:, i] for i, c in enumerate(SUMMARY_COLS)}
+    a = np.array(rows)
+    if a.ndim == 1:
+        a = a.reshape(1, -1)
+    # files written before t_wall was added have one column less
+    return {c: a[:, i] for i, c in enumerate(SUMMARY_COLS[:a.shape[1]])}
 
 
 def iter_labels(path):
