@@ -5,6 +5,9 @@ A million supercooled Lennard-Jones atoms are simulated on GPUs (MPI + CUDA spat
 while a separate group of MPI analysis ranks labels every atom as liquid or crystal on the fly and
 tracks the growing crystal nucleus, so the trajectory never has to be written to disk.
 
+Project site with the live simulation sketch and interactive figures: https://manasvardhan.com/insitu-nucleation-md/
+(source in [`site/`](site/), deployed by GitHub Pages).
+
 ![A crystal growing from a seed in 1,048,576 supercooled LJ atoms](docs/media/nucleation_crystal.gif)
 
 *1,048,576 atoms at T\* = 0.70. Only the atoms that the in situ neural network labels crystalline

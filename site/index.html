@@ -1,0 +1,1806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watching a Liquid Freeze</title>
+<meta name="description" content="A million supercooled Lennard-Jones atoms on GPUs, with in situ machine-learning phase detection that labels every atom liquid or crystal while the simulation runs. CSCI 596, USC, Fall 2026.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900;1,62..125,100..900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  /* palette */
+  --paper:#F6F6F3; --white:#FFFFFF;
+  --ink:#121212; --ink2:#5C5C58; --ink3:#8A8A85;
+  --rule:rgba(18,18,18,.18); --grid:rgba(18,18,18,.08); --fill25:rgba(18,18,18,.25);
+  --acc:#E0351B; --acc-tint:#F0624A; --acc-dim:rgba(224,53,27,.08);
+  --liq:#2A2A28; --liq-line:#6B6B66;
+  --cpu1:#121212; --cpu2:#5C5C58; --cpu3:#9A9A95;
+  /* type */
+  --f:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --h1-size:clamp(56px, 7.5vw, 112px); --h1-wght:700; --h1-track:-0.03em; --h1-lh:.95;
+  --h2-size:clamp(34px, 3.8vw, 56px);  --h2-wght:700; --h2-track:-0.02em; --h2-lh:1.02;
+  --h3-size:clamp(20px, 1.6vw, 22px);  --h3-wght:600;
+  --label-size:11px; --label-wght:500; --label-wdth:118%; --label-track:.16em;
+  --num-wght:500; --num-wdth:118%; --num-size:clamp(44px, 4.4vw, 64px); --num-size-s:clamp(32px, 2.8vw, 42px);
+  --secnum-size:56px; --secnum-wght:300;
+  --body-size:17px; --body-lh:1.5; --measure:64ch;
+  --small:14px; --mono-size:13px; --mono-size-s:12px;
+  /* grid */
+  --maxw:1320px; --gap:24px;
+  --padl:max(24px, env(safe-area-inset-left, 0px)); --padr:max(24px, env(safe-area-inset-right, 0px));
+  --navh:56px;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:calc(var(--navh) + 8px);-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f);font-size:var(--body-size);font-weight:400;font-stretch:100%;line-height:var(--body-lh);overflow-x:hidden;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums lining-nums}
+p{margin:0 0 1em;max-width:var(--measure)}
+a{color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:var(--acc)}
+::selection{background:var(--acc);color:#fff}
+b,strong{font-weight:700}
+code{font-family:var(--f-mono);font-size:.82em;background:none;padding:0;color:var(--ink)}
+h1,h2,h3{margin:0;color:var(--ink);font-family:var(--f);font-stretch:100%}
+h1{font-size:var(--h1-size);font-weight:var(--h1-wght);letter-spacing:var(--h1-track);line-height:var(--h1-lh)}
+h2{font-size:var(--h2-size);font-weight:var(--h2-wght);letter-spacing:var(--h2-track);line-height:var(--h2-lh)}
+h3{font-size:var(--h3-size);font-weight:var(--h3-wght);letter-spacing:-.005em;line-height:1.2}
+.acc{color:var(--acc)} .ice{color:var(--acc)} .ember{color:var(--ink)} .signal{color:var(--acc)} .ink2{color:var(--ink2)}
+.lbl{font-family:var(--f);font-size:var(--label-size);font-weight:var(--label-wght);font-stretch:var(--label-wdth);letter-spacing:var(--label-track);text-transform:uppercase;line-height:1.3}
+.mono{font-family:var(--f-mono);font-size:var(--mono-size)}
+.small{font-size:var(--small)}
+
+/* grid */
+.wrap{max-width:calc(var(--maxw) + 48px);margin:0 auto;padding-left:var(--padl);padding-right:var(--padr)}
+.g12{display:grid;grid-template-columns:repeat(12, minmax(0,1fr));column-gap:var(--gap)}
+.g12 > *{min-width:0}
+.c1-5{grid-column:1 / 6}.c1-6{grid-column:1 / 7}.c1-7{grid-column:1 / 8}.c1-8{grid-column:1 / 9}.c1-12{grid-column:1 / 13}
+.c6-12{grid-column:6 / 13}.c7-12{grid-column:7 / 13}.c8-12{grid-column:8 / 13}.c9-12{grid-column:9 / 13}.c3-10{grid-column:3 / 11}.c3-12{grid-column:3 / 13}
+@media (max-width:900px){ .g12 > *{grid-column:1 / -1 !important} }
+
+/* nav */
+.nav{position:fixed;inset:0 0 auto 0;height:var(--navh);z-index:50;background:var(--paper);border-bottom:1px solid var(--rule)}
+.nav .wrap{height:100%;display:flex;align-items:center;gap:24px}
+.nav .brand{font-size:15px;font-weight:700;letter-spacing:-.005em;color:var(--ink);text-decoration:none;white-space:nowrap}
+.nav ul{list-style:none;display:flex;gap:0;margin:0 0 0 auto;padding:0;min-width:0}
+.nav li a{display:block;font-size:13px;font-weight:500;color:var(--ink2);text-decoration:none;padding:4px 7px;white-space:nowrap}
+.nav li a .nn{font-family:var(--f-mono);font-size:11px;margin-right:4px;color:var(--ink3)}
+.nav li a:hover{color:var(--ink)}
+.nav li a.active{color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:6px}
+.nav li a.active .nn{color:var(--acc)}
+.nav .now{display:none;margin-left:auto;font-size:13px;font-weight:500;white-space:nowrap}
+@media (max-width:1240px){ .nav li a .nm{display:none} .nav li a .nn{margin:0;font-size:12px;color:var(--ink2)} }
+@media (max-width:640px){ .nav ul{display:none} .nav .now{display:block} }
+
+/* hero stage */
+.hero{position:relative;min-height:max(720px, min(100vh, 1100px));padding-top:var(--navh);display:flex;flex-direction:column;border-bottom:1px solid var(--ink)}
+.stage{position:relative;flex:1;display:flex}
+#sim{position:absolute;top:0;bottom:0;left:40%;right:0;width:60%;height:100%;display:block;cursor:grab;touch-action:pan-y}
+#sim:active{cursor:grabbing}
+.hero > .wrap{width:100%}
+.hero-inner{position:relative;z-index:2;flex:1;width:100%;padding-top:clamp(24px, 5vh, 64px);padding-bottom:28px;pointer-events:none;align-content:start}
+.hero-inner a{pointer-events:auto}
+.hero .dateline{grid-column:1 / 8;color:var(--ink2);margin:0 0 22px}
+.hero h1{grid-column:1 / 8}
+.hero h1 .w{display:inline-block}
+.js .hero.intro h1 .w{opacity:0;transform:translateY(12px)}
+.js .hero.intro.go h1 .w{opacity:1;transform:none;transition:opacity .7s var(--ease), transform .7s var(--ease);transition-delay:calc(var(--i) * 60ms)}
+.hero .sub{grid-column:1 / 6;font-size:20px;line-height:1.4;font-weight:400;margin:24px 0 0;max-width:36ch}
+.hero .readouts{grid-column:1 / 8;margin-top:32px;flex-wrap:nowrap}
+.hero .ro{padding:0 20px}
+.hero .ro:first-child{padding-left:0}
+.hero .ro-val{font-size:clamp(28px, 2.5vw, 36px)}
+.hero .ro-lab{max-width:19ch}
+@media (max-width:560px){ .hero .readouts{flex-wrap:wrap} .hero .ro:first-child{flex-basis:100%} .hero .ro:nth-child(2){padding-left:0;border-left:0} }
+.hero .tlinks{grid-column:1 / 7;margin-top:28px}
+.tlinks{display:flex;flex-wrap:wrap;gap:8px 28px}
+.tlinks a{font-size:15px;font-weight:600;white-space:nowrap}
+.tlinks a span{display:inline-block;margin-left:.3em;transition:transform .4s var(--ease)}
+.tlinks a:hover span{transform:translateX(3px)}
+.hero.nogl #sim{display:none}
+
+/* instrument strip */
+.strip{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:0 28px;border-top:1px solid var(--ink);padding-top:16px;padding-bottom:16px;background:var(--paper);position:relative;z-index:3}
+.strip > *{min-width:0}
+.strip-ro{display:flex}
+.strip-ro > div{display:flex;flex-direction:column;gap:4px;padding:0 18px;border-left:1px solid var(--rule)}
+.strip-ro > div:first-child{padding-left:0;border-left:0}
+.strip-ro .k{font-family:var(--f-mono);font-size:11px;color:var(--ink2)}
+.strip-ro .v{font-size:22px;font-weight:500;font-stretch:118%;line-height:1;white-space:nowrap;color:var(--ink)}
+.strip-ro .v.ice{color:var(--acc)}
+#hud-t{min-width:4.2ch;display:inline-block}#hud-n{min-width:6.4ch;display:inline-block}#hud-f{min-width:4.6ch;display:inline-block}
+#hud-play{all:unset;box-sizing:border-box;cursor:pointer;width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--ink);color:var(--ink)}
+#hud-play:hover,#hud-play:focus-visible{background:var(--ink);color:var(--paper)}
+#hud-play svg{width:10px;height:10px}
+.tl{position:relative;height:46px}
+.tl:focus-within .tl-track{outline:1px solid var(--acc);outline-offset:6px}
+.tl-track{position:absolute;left:0;right:0;top:23px;height:1px;background:var(--ink)}
+.tl-fill{display:none}
+.tl-ticks{position:absolute;inset:0;pointer-events:none}
+.tl-ticks i{position:absolute;top:19px;width:1px;height:9px;background:var(--ink)}
+.tl-ticks i.ev{height:13px;top:17px}
+.tl-ticks span{position:absolute;top:31px;transform:translateX(-50%);font-family:var(--f-mono);font-size:10.5px;color:var(--ink2);white-space:nowrap}
+.tl-ticks span.end{transform:translateX(-100%)}
+.tl-ticks span.start{transform:none}
+.tl-ticks span b{font-family:var(--f);font-weight:500;color:var(--ink);margin-left:.5em}
+.tl-ph{position:absolute;top:0;bottom:14px;left:0;width:1px;background:var(--acc);pointer-events:none}
+.tl-ph span{position:absolute;bottom:100%;left:0;transform:translate(-50%, -2px);font-size:12px;font-weight:500;font-stretch:118%;color:var(--acc);white-space:nowrap}
+#hud-scrub{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+.strip-note{font-family:var(--f-mono);font-size:12px;color:var(--ink2);max-width:24ch;line-height:1.4}
+.hero.nogl .strip-note::after{content:" (WebGL unavailable here)"}
+.hero .figcap{margin:0 0 20px;border-top:1px solid var(--rule)}
+@media (max-width:1100px){ .strip{grid-template-columns:auto auto minmax(0,1fr)} .strip-note{display:none} }
+@media (max-width:760px){
+  .hero{min-height:auto}
+  .stage{flex-direction:column}
+  #sim{position:relative;left:auto;width:100%;height:92vw;order:2}
+  .hero-inner{padding-bottom:12px}
+  .strip{grid-template-columns:auto minmax(0,1fr);row-gap:14px}
+  .strip-ro{grid-column:1 / -1}
+  .tl-ticks span b{display:none}
+  .strip-note{display:block;grid-column:1 / -1;max-width:none}
+}
+
+/* sections */
+section.block{position:relative}
+.sec-head{border-top:1px solid var(--ink);margin-top:96px;padding-top:20px;margin-bottom:40px;row-gap:24px;align-items:start}
+#problem .sec-head{margin-top:120px}
+.sec-num{grid-column:1 / 3}
+.sec-num .n{display:block;font-size:var(--secnum-size);font-weight:var(--secnum-wght);font-stretch:100%;line-height:.9;letter-spacing:-.02em;color:var(--ink)}
+.sec-num .lbl{display:block;margin-top:10px;color:var(--ink2)}
+.sec-head h2{grid-column:3 / 10}
+.sec-ref{grid-column:10 / 13;font-family:var(--f-mono);font-size:var(--mono-size-s);color:var(--ink2);padding-top:8px;line-height:1.6}
+.sec-head .lede{grid-column:3 / 10;font-size:20px;line-height:1.45;margin:0;max-width:56ch}
+@media (max-width:900px){ .sec-head{margin-top:72px} .sec-num .n{font-size:40px} .sec-ref{padding-top:0} }
+.row{margin-top:40px;row-gap:40px}
+.row:first-child{margin-top:0}
+
+/* figures */
+figure{margin:0}
+.fig img,.fig video{display:block;width:100%;height:auto}
+.figcap{border-top:1px solid var(--rule);padding-top:8px;margin-top:12px;font-size:var(--small);line-height:1.45;color:var(--ink2);max-width:72ch}
+.figcap .fn{display:block;font-size:var(--label-size);font-weight:var(--label-wght);font-stretch:var(--label-wdth);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--ink);margin-bottom:4px}
+.tcap{font-size:var(--small);color:var(--ink2);margin:0 0 8px}
+.tcap .fn{font-size:var(--label-size);font-weight:var(--label-wght);font-stretch:var(--label-wdth);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--ink);margin-right:10px}
+
+/* readouts */
+.readouts{display:flex;flex-wrap:wrap;row-gap:20px}
+.ro{padding:0 24px;border-left:1px solid var(--rule);min-width:0}
+.ro:first-child{padding-left:0;border-left:0}
+.ro-val{font-size:var(--num-size);font-weight:var(--num-wght);font-stretch:var(--num-wdth);letter-spacing:-.01em;line-height:1;white-space:nowrap;color:var(--ink)}
+.ro-val.acc{color:var(--acc)}
+.ro-val small{font-family:var(--f-mono);font-size:var(--mono-size);font-weight:400;font-stretch:normal;letter-spacing:0;color:var(--ink2);margin:0 .5em 0 .3em}
+.ro-lab{font-size:13px;line-height:1.4;color:var(--ink2);margin-top:10px;max-width:24ch}
+.readouts.two{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:28px 0}
+.readouts.two .ro:nth-child(odd){padding-left:0;border-left:0}
+.readouts.two .ro-val{font-size:var(--num-size-s)}
+@media (max-width:560px){ .readouts.two{grid-template-columns:minmax(0,1fr)} .readouts.two .ro{padding-left:0;border-left:0} .ro{padding:0 16px} }
+.ro.big .ro-val{font-size:160px;line-height:.8;color:var(--acc);font-weight:500}
+
+/* reveal */
+.js [data-reveal]{transition:opacity .8s var(--ease), transform .8s var(--ease)}
+.js [data-reveal].pre{opacity:0;transform:translateY(14px)}
+@media (prefers-reduced-motion: reduce){.js [data-reveal].pre{opacity:1;transform:none}}
+
+/* disk bars */
+.db{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;margin:0 0 22px}
+.db > *{min-width:0}
+.db .lab{font-size:15px;font-weight:600}
+.db .lab span{display:block;font-size:13px;font-weight:400;color:var(--ink2)}
+.db .val{font-size:clamp(28px,2.6vw,38px);font-weight:500;font-stretch:118%;line-height:1;align-self:end;text-align:right}
+.db .val small{font-family:var(--f-mono);font-size:var(--mono-size);font-stretch:normal;color:var(--ink2);margin-left:.3em}
+.db .track{grid-column:1 / -1;height:22px;position:relative;margin-top:8px}
+.db .fill{position:absolute;inset:0 auto 0 0;border:1px solid var(--ink);transform-origin:left center;transition:transform 1s var(--ease)}
+.db .fill.full{background:var(--fill25)}
+.db .fill.ins,.db .fill.lab{background:var(--acc);border-color:var(--acc)}
+.db .x{grid-column:1 / -1;font-size:13px;font-weight:600;color:var(--ink);margin-top:4px}
+.js .pre .db .fill{transform:scaleX(0)}
+.scale{position:relative;height:24px;font-family:var(--f-mono);font-size:11px;color:var(--ink2);border-top:1px solid var(--ink)}
+.scale span,.bscale .ticks span{position:absolute;top:6px;transform:translateX(-50%);white-space:nowrap}
+.scale span:first-child,.bscale .ticks span:first-child{transform:none}
+.scale span.end,.bscale .ticks span.end{transform:translateX(-100%)}
+.scale span::before,.bscale .ticks span::before{content:"";position:absolute;top:-6px;left:50%;width:1px;height:4px;background:var(--ink)}
+.scale span:first-child::before,.bscale .ticks span:first-child::before{left:0}
+.scale span.end::before,.bscale .ticks span.end::before{left:auto;right:0}
+
+/* architecture diagram */
+.arch svg{display:block;width:100%;height:auto}
+.arch text{font-family:var(--f);font-size:12px;font-weight:500;fill:var(--ink2)}
+.arch .t-title{font-size:15px;font-weight:700;fill:var(--ink)}
+.arch .t-unit{font-size:14px;font-weight:700;fill:var(--ink)}
+.arch .t-sub{font-family:var(--f-mono);font-size:10.5px;font-weight:400;fill:var(--ink2)}
+.arch .t-lab{fill:var(--ink)}
+.arch .t-ice{fill:var(--acc)}
+.arch .t-num{font-size:22px;font-weight:300;fill:var(--ink)}
+.arch .t-big{font-size:28px;font-weight:500;font-stretch:118%;fill:var(--acc)}
+.arch .t-step{font-family:var(--f-mono);font-size:20px;fill:var(--ink)}
+.arch .box{fill:var(--white);stroke:var(--ink);stroke-width:1}
+.arch .unit{fill:var(--white);stroke:var(--ink);stroke-width:1}
+.arch .unit.gpu{stroke-width:1.5}
+.arch .node{fill:var(--white);stroke:var(--ink);stroke-width:1;transition:fill .25s, stroke .25s}
+.arch .node.on{fill:var(--acc-dim);stroke:var(--acc)}
+.arch .wire{fill:none;stroke:var(--ink);stroke-width:1}
+.arch .wire.ice{stroke:var(--ink);stroke-width:1;stroke-dasharray:4 3}
+.arch .wire.sig{stroke:var(--ink);stroke-width:1}
+.arch .disk{fill:var(--white);stroke:var(--ink)}
+.arch .disk.on{fill:var(--acc-dim)}
+
+/* cards as ruled columns */
+.cards{margin-top:40px;row-gap:32px}
+.card{border-top:1px solid var(--ink);padding-top:14px}
+.card .tag{margin-bottom:10px;color:var(--ink2)}
+.card h3{margin-bottom:10px}
+.card p{font-size:15px;line-height:1.5}
+
+/* tables */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;font-size:15px}
+.tbl th,.tbl td{text-align:left;padding:8px 14px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+.tbl thead th{font-size:var(--label-size);font-weight:var(--label-wght);font-stretch:var(--label-wdth);letter-spacing:var(--label-track);text-transform:uppercase;color:var(--ink);border-bottom:1px solid var(--ink)}
+.tbl td{color:var(--ink)}
+.tbl td.k{color:var(--ink)}
+.tbl td.n,.tbl th.n{font-family:var(--f-mono);font-size:var(--mono-size);text-align:right;white-space:nowrap}
+.tbl thead th.n{font-family:var(--f)}
+.tbl thead th.nt{text-transform:none;letter-spacing:.02em;font-size:13px}
+.tbl td.v{font-family:var(--f-mono);font-size:var(--mono-size)}
+.tbl td.c2{color:var(--ink2)}
+.tbl td.n.ice,.tbl td.v.ice{color:var(--acc)}
+.tbl td.hi{font-weight:600}
+.tbl tr:last-child td{border-bottom:1px solid var(--ink)}
+
+/* temperature strip */
+.tstrip svg{display:block;width:100%}
+.tstrip text{font-family:var(--f-mono);font-size:10.5px;fill:var(--ink2)}
+.tstrip .band-l{font-family:var(--f);font-size:var(--label-size);font-weight:500;font-stretch:118%;letter-spacing:.16em;fill:var(--ink)}
+.tstrip .curve{fill:none;stroke-width:2}
+.js .tstrip.draw .curve{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.8s .2s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.control{border-left:2px solid var(--ink);padding:2px 0 2px 16px}
+.control p{font-size:16px}
+
+/* charts */
+.chart{position:relative;width:100%;min-width:0}
+.chart svg{display:block;overflow:visible}
+.chart text{font-family:var(--f-mono);font-size:11px;fill:var(--ink2)}
+.chart .grid{stroke:var(--grid);stroke-width:1}
+.chart .axis{stroke:var(--ink)}
+.chart .xt{stroke:var(--ink)}
+.chart .alabel{font-family:var(--f);font-size:12px;font-weight:500;fill:var(--ink)}
+.chart .endl{font-family:var(--f);font-size:12px;font-weight:600}
+.chart .ann{stroke:var(--ink);stroke-dasharray:1 3}
+.chart .ann-t{font-family:var(--f);font-size:12px;font-weight:500;fill:var(--ink2)}
+.chart .hit{cursor:crosshair;touch-action:pan-y}
+.chart .cursor line{stroke:var(--ink);stroke-width:1}
+.tip{position:absolute;top:0;pointer-events:none;background:var(--white);border:1px solid var(--ink);padding:7px 10px;font-family:var(--f-mono);font-size:12px;line-height:1.55;color:var(--ink);white-space:nowrap;z-index:4}
+.chart-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 20px;margin:0 0 4px}
+.chart-head h3{font-size:15px;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13px;font-weight:500;color:var(--ink)}
+.legend i{display:inline-block;width:20px;height:0;border-top:2px solid;vertical-align:middle;margin-right:7px}
+.legend i.dash{border-top-style:dashed}
+.legend i.thin{border-top-width:1px}
+
+/* growth */
+.snaps{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (max-width:900px) and (min-width:560px){ .snaps{grid-template-columns:repeat(3, minmax(0,1fr))} }
+.snap{margin:0;position:relative;outline:2px solid transparent;outline-offset:3px;transition:outline-color .2s, opacity .2s}
+.snap img{display:block;width:100%;height:auto}
+.snap figcaption{font-family:var(--f-mono);font-size:12px;color:var(--ink2);margin-top:4px}
+.snaps.hovering .snap{opacity:.5}
+.snaps .snap.on{opacity:1;outline-color:var(--acc)}
+.facts{list-style:none;padding:0;margin:0}
+.facts li{padding:12px 0;border-bottom:1px solid var(--rule);font-size:16px}
+.facts li:first-child{border-top:1px solid var(--ink)}
+
+/* exactness */
+.steps111 .row{margin:0 0 16px}
+.steps111 .rl{font-size:13px;font-weight:500;margin-bottom:6px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.steps111 .rl .ice{font-family:var(--f-mono);font-size:12px;font-weight:400;color:var(--ink2)}
+.steps111 .cells{display:flex;flex-wrap:wrap;gap:3px}
+.steps111 .cells i{display:block;width:7px;height:7px;border:1px solid var(--ink)}
+
+/* kernel story: three ruled columns */
+.story{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));margin-top:24px;border-top:1px solid var(--ink)}
+.story > *{min-width:0}
+.story .st{padding:18px 24px 6px;border-left:1px solid var(--rule)}
+.story .st:first-child{padding-left:0;border-left:0}
+.story .st .tag{margin-bottom:12px;color:var(--ink2)}
+.story .st p{font-size:15px;margin:0}
+.story svg{display:block;width:100%;max-width:280px;height:auto;margin:4px 0 14px}
+.story svg text{font-family:var(--f-mono);font-size:9.5px;fill:var(--ink2)}
+.story .big{font-size:var(--num-size-s);font-weight:500;font-stretch:118%;line-height:1;margin:0 0 14px;white-space:nowrap}
+.story .big small{font-family:var(--f-mono);font-size:var(--mono-size);font-stretch:normal;color:var(--ink2);margin-left:.35em}
+.story .big .ar{font-weight:300;color:var(--ink2);margin:0 .2em;font-size:.6em;vertical-align:.1em}
+@media (max-width:900px){ .story{grid-template-columns:minmax(0,1fr)} .story .st{padding:18px 0;border-left:0;border-bottom:1px solid var(--rule)} }
+
+/* cost bars */
+.cb{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:8px 24px;padding:16px 0;border-top:1px solid var(--rule)}
+.cb:first-child{border-top:1px solid var(--ink)}
+.cb > *{min-width:0}
+.cb .who{font-size:15px;font-weight:600}
+.cb .who span{display:block;font-family:var(--f-mono);font-size:12px;font-weight:400;color:var(--ink2);margin-top:2px}
+.cb .pct{font-size:var(--num-size-s);font-weight:500;font-stretch:118%;line-height:1;margin-top:10px;white-space:nowrap}
+.cb .pct small{font-family:var(--f-mono);font-size:var(--mono-size);font-stretch:normal;color:var(--ink2);margin-left:.4em}
+@media (max-width:700px){ .cb{grid-template-columns:minmax(0,1fr)} }
+.bars{display:flex;flex-direction:column;gap:6px;justify-content:center}
+.bar{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;align-items:center;font-family:var(--f-mono);font-size:12px}
+.bar .bl{color:var(--ink2)}
+.bar .bt{position:relative;height:18px}
+.bar .bf{position:absolute;inset:0 auto 0 0;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;transform-origin:left;transition:transform 1s var(--ease);white-space:nowrap}
+.bar .bf.off{background:var(--fill25);color:var(--ink)}
+.bar .bf.on{background:var(--ink);color:var(--paper)}
+.bar .bf .stall{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(135deg, var(--acc) 0 2px, transparent 2px 5px);background-color:var(--paper);border:1px solid var(--acc)}
+.bar .bf .val{position:relative;background:var(--ink);color:var(--paper);padding:0 3px}
+.js .pre .bar .bf{transform:scaleX(0)}
+.bscale{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);column-gap:24px;font-family:var(--f-mono);font-size:11px;color:var(--ink2);margin-top:8px}
+.bscale .bsc{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px}
+.bscale .ticks{position:relative;height:24px;border-top:1px solid var(--ink)}
+@media (max-width:700px){ .bscale{grid-template-columns:minmax(0,1fr)} .bscale > span{display:none} }
+.rule{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:14px 0;font-size:17px}
+.rule .lbl{display:block;margin-bottom:6px;color:var(--acc)}
+
+/* limits */
+.lim h3{margin-bottom:10px}
+.lim ul{list-style:none;padding:0;margin:0;border-top:1px solid var(--ink)}
+.lim li{padding:12px 0;border-bottom:1px solid var(--rule);font-size:16px}
+
+/* footer */
+footer{margin-top:120px;border-top:1px solid var(--ink);padding:40px 0 64px}
+footer h2{grid-column:1 / 8}
+footer .colo{grid-column:9 / 13;font-size:var(--small);color:var(--ink2)}
+footer .colo p{font-size:var(--small)}
+footer .tlinks{grid-column:1 / 8;margin-top:28px}
+</style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Sections">
+  <div class="wrap">
+    <a class="brand" href="#top">Watching a Liquid Freeze</a>
+    <ul>
+      <li><a href="#problem"><span class="nn">01</span><span class="nm">Problem</span></a></li>
+      <li><a href="#approach"><span class="nn">02</span><span class="nm">Approach</span></a></li>
+      <li><a href="#experiment"><span class="nn">03</span><span class="nm">Experiment</span></a></li>
+      <li><a href="#classifier"><span class="nn">04</span><span class="nm">Classifier</span></a></li>
+      <li><a href="#growth"><span class="nn">05</span><span class="nm">Growth</span></a></li>
+      <li><a href="#exact"><span class="nn">06</span><span class="nm">Exactness</span></a></li>
+      <li><a href="#speed"><span class="nn">07</span><span class="nm">Speed</span></a></li>
+      <li><a href="#cost"><span class="nn">08</span><span class="nm">Cost</span></a></li>
+      <li><a href="#disk"><span class="nn">09</span><span class="nm">Disk</span></a></li>
+      <li><a href="#validation"><span class="nn">10</span><span class="nm">Validation</span></a></li>
+      <li><a href="#limits"><span class="nn">11</span><span class="nm">Limits</span></a></li>
+    </ul>
+    <span class="now" id="nav-now" aria-hidden="true"></span>
+  </div>
+</nav>
+
+<!-- ======================= HERO ======================= -->
+<header class="hero" id="top">
+  <div class="stage">
+    <canvas id="sim" aria-hidden="true"></canvas>
+    <div class="wrap hero-inner g12">
+      <p class="dateline lbl">CSCI 596 &middot; USC &middot; Fall 2026 &middot; Manas Vardhan</p>
+      <h1 id="hero-title">Watching a Liquid Freeze</h1>
+      <p class="sub">A million supercooled atoms run on GPUs while a second group of processors labels every atom liquid or crystal in flight, so the trajectory never has to be written to disk.</p>
+      <div class="readouts">
+        <div class="ro"><div data-count class="ro-val">1,048,576</div><div class="ro-lab">Lennard-Jones atoms on 2 P100 GPUs</div></div>
+        <div class="ro"><div class="ro-val">0</div><div class="ro-lab">label mismatches in 7,104,000, in situ vs post hoc</div></div>
+        <div class="ro"><div data-count class="ro-val">13<small>x</small></div><div class="ro-lab">less disk than a full dump</div></div>
+      </div>
+      <div class="tlinks">
+        <a href="https://github.com/ManasVardhan/insitu-nucleation-md">Code on GitHub<span aria-hidden="true">&rarr;</span></a>
+        <a href="https://github.com/ManasVardhan/insitu-nucleation-md/blob/main/README.md">Full report<span aria-hidden="true">&rarr;</span></a>
+        <a href="#growth">Results<span aria-hidden="true">&darr;</span></a>
+      </div>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="strip" id="hud">
+      <div class="strip-ro">
+        <div><span class="k">t</span><span class="v" id="hud-t">0.0</span></div>
+        <div><span class="k">n_max</span><span class="v ice" id="hud-n">0</span></div>
+        <div><span class="k">crystal</span><span class="v" id="hud-f">0.0%</span></div>
+      </div>
+      <button id="hud-play" type="button" aria-label="Pause"></button>
+      <div class="tl" id="hud-tl">
+        <div class="tl-track"><div class="tl-fill" id="hud-fill"></div></div>
+        <div class="tl-ticks" id="hud-ticks"></div>
+        <div class="tl-ph" id="hud-ph"><span id="hud-pht">0</span></div>
+        <input id="hud-scrub" type="range" min="0" max="1000" value="0" aria-label="Simulation time t, 0 to 487">
+      </div>
+      <div class="strip-note">A sketch driven by the measured n_max(t) of the real run</div>
+    </div>
+    <p class="figcap"><span class="fn">Fig. 1</span>Live sketch of the run. Points sit on an FCC grid; the crystal radius follows the measured n_max(t) of the 1,048,576-atom run, so the end state is 41% crystal, as in the real box. Crystal in red, liquid in graphite. Drag to rotate; scrub the timeline.</p>
+  </div>
+</header>
+
+<main>
+<!-- ======================= 01 PROBLEM ======================= -->
+<section class="block" id="problem">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">01</span><span class="lbl">Problem</span></div>
+      <h2>Freezing starts somewhere small, at a moment nobody can predict</h2>
+      <div class="sec-ref">Fig. 2</div>
+    </div>
+    <div class="g12 row">
+      <div class="c1-5">
+        <p>Crystallization of a supercooled liquid begins with a rare event: a nanometer-sized crystal nucleus appears somewhere in a large volume of disordered atoms, and either dissolves or grows. Molecular dynamics resolves this atom by atom, but nobody knows in advance where or when it will happen.</p>
+        <p>So the usual workflow writes the full trajectory to disk at high frequency and searches it afterwards. At scale, I/O becomes the bottleneck instead of computation, and almost all of the stored data describes plain liquid (Fig. 2).</p>
+      </div>
+      <figure class="c7-12 fig">
+        <div class="diskbars" data-reveal>
+          <div class="db">
+            <div class="lab">Full dump of every atom, every 100 steps<span>full precision, 24 bytes per atom</span></div>
+            <div class="val">24.5<small>GB</small></div>
+            <div class="track"><div class="fill full" style="width:100%"></div></div>
+          </div>
+          <div class="db">
+            <div class="lab">In situ: labels, summary and 97 movie frames<span>what this project wrote</span></div>
+            <div class="val">1.85<small>GB</small></div>
+            <div class="track"><div class="fill ins" style="width:7.55%"></div></div>
+            <div class="x">13.2x smaller</div>
+          </div>
+          <div class="db">
+            <div class="lab">In situ: labels and summary only<span>5 bytes per crystalline atom</span></div>
+            <div class="val">0.53<small>GB</small></div>
+            <div class="track"><div class="fill lab" style="width:2.16%"></div></div>
+            <div class="x">46.4x smaller</div>
+          </div>
+          <div class="scale"><span style="left:0">0</span><span style="left:20.41%">5</span><span style="left:40.82%">10</span><span style="left:61.22%">15</span><span style="left:81.63%">20</span><span class="end" style="left:100%">24.5 GB</span></div>
+        </div>
+        <figcaption class="figcap"><span class="fn">Fig. 2</span>Bytes written by the production run, drawn to scale. N = 1,048,576, analysis every K = 100 steps, 974 analysis steps.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 02 APPROACH ======================= -->
+<section class="block" id="approach">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">02</span><span class="lbl">Approach</span></div>
+      <h2>Analyze the atoms while they are still in memory</h2>
+      <div class="sec-ref">Fig. 3</div>
+      <p class="lede">One MPI job, split in two. Simulation ranks step the molecular dynamics with forces on the GPU. Analysis ranks sit on CPU cores and never touch a GPU. Every 100 steps each simulation rank ships its atoms to an analysis rank without waiting, and keeps stepping.</p>
+    </div>
+    <figure class="fig">
+      <div class="arch" id="arch" role="img" aria-label="Architecture: two simulation ranks, each a CPU and a GPU exchanging positions and forces, swap border atoms every step; every 100 steps they send atoms plus a 3.0 sigma halo to the analysis ranks, which measure order, run a neural network to label liquid or crystal, and find the largest crystal; only labels and n_max go to disk."></div>
+      <figcaption class="figcap"><span class="fn">Fig. 3</span>The SIM/ANA split. Drawn with 2 SIM ranks; the production run used 4 SIM ranks sharing 2 P100 GPUs, and 4 ANA ranks with 2 OpenMP threads each. Red dots are the batches sent every 100 steps.</figcaption>
+    </figure>
+    <div class="g12 cards">
+      <div class="card c1-4" style="grid-column:1 / 5"><div class="tag lbl">Simulate on GPUs</div><h3>A CUDA force kernel inside the course code</h3><p>The SIM side is the course MD code <code>pmd.c</code> (spatial decomposition, atom caching from 6 neighbors, migration) with a CUDA force path. Each step a rank copies coordinates to the GPU, sorts atoms by cell, computes Lennard-Jones forces in double precision and copies them back. GPU and CPU forces agree to 8.0e-14.</p></div>
+      <div class="card" style="grid-column:5 / 9"><div class="tag lbl">Separate analysis ranks</div><h3>MPI_Comm_split and a send nobody waits for</h3><p><code>MPI_Comm_split</code> gives SIM and ANA ranks their own communicators. Each SIM rank packs residents, halo atoms and global IDs into one message and posts <code>MPI_Isend</code>. It waits on that send only before the next one, 100 steps later, and that wait is timed as the stall.</p></div>
+      <div class="card" style="grid-column:9 / 13"><div class="tag lbl">The wider halo</div><h3>3.0 instead of 2.5, because of neighbors of neighbors</h3><p>The averaged order q̄6 of an atom averages over its neighbors within r_q = 1.5, and each of those neighbors needs its own full shell. So an ANA rank needs every atom within 2 r_q = 3.0 of its subdomain: wider than the 2.5 force cutoff the simulation already exchanges. A second halo exchange of width 3.0 runs every 100 steps.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 03 EXPERIMENT ======================= -->
+<section class="block" id="experiment">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">03</span><span class="lbl">Experiment</span></div>
+      <h2>Melt it, quench it, plant a seed, let go</h2>
+      <div class="sec-ref">Fig. 4<br>Table 1</div>
+      <p class="lede">A million atoms are melted, quenched below freezing, and held. A small FCC crystal seed is frozen at the box center through the quench, then released at t = 40 to see whether it grows (Fig. 4).</p>
+    </div>
+    <figure class="fig">
+      <div class="tstrip" id="tstrip" data-reveal aria-label="Temperature protocol: melt at T* = 2.0, quench to 0.70, hold; seed released at t = 40; run stopped at t = 487."></div>
+      <figcaption class="figcap"><span class="fn">Fig. 4</span>Temperature protocol of the production run. The time axis is stretched below t = 45. The seed is released at t = 40 (step 8,000); the 1-hour queue limit stopped the run at t = 487 (step 97,400 of 112,000).</figcaption>
+    </figure>
+    <div class="g12 row">
+      <div class="c1-5">
+        <h3 style="margin-bottom:16px">Controls at the same state point</h3>
+        <div class="control">
+          <p>With no seed, the liquid stayed liquid for 80k hold steps at T* = 0.70 (largest solid cluster at most 12 atoms).</p>
+          <p>Seeds of 55 and 87 atoms melted. Seeds of 249 and 369 atoms grew. The critical size lies between 87 and 249 atoms.</p>
+          <p style="margin:0">At T* = 0.55 the liquid froze on its own, which would have competed with the seed. So the run uses 0.70.</p>
+        </div>
+      </div>
+      <div class="c7-12 tscroll">
+        <p class="tcap"><span class="fn">Table 1</span>Production parameters.</p>
+        <table class="tbl">
+          <thead><tr><th>Parameter</th><th>Production value</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Atoms N</td><td class="v">1,048,576 (4 x 64³ FCC cells)</td></tr>
+            <tr><td class="k">Density ρ*</td><td class="v">0.95 (box L = 103.4 σ)</td></tr>
+            <tr><td class="k">Potential</td><td class="v">LJ, force-shifted, r_c = 2.5</td></tr>
+            <tr><td class="k">Time step Δt</td><td class="v">0.005</td></tr>
+            <tr><td class="k">Thermostat</td><td class="v">Berendsen, τ_T = 0.1</td></tr>
+            <tr><td class="k">Melt</td><td class="v">T* = 2.0 for 5,000 steps</td></tr>
+            <tr><td class="k">Quench</td><td class="v">ramp to 0.70 over 2,000 steps</td></tr>
+            <tr><td class="k">Hold</td><td class="v">T* = 0.70, 90,400 of 105,000 steps</td></tr>
+            <tr><td class="k">Seed</td><td class="v ice">R = 4.5 σ, 369 atoms, released at step 8,000</td></tr>
+            <tr><td class="k">Analysis</td><td class="v">every K = 100 steps, r_q = 1.5</td></tr>
+            <tr><td class="k">Layout</td><td class="v">4 SIM ranks on 2 P100, 4 ANA ranks</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 04 CLASSIFIER ======================= -->
+<section class="block" id="classifier">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">04</span><span class="lbl">Classifier</span></div>
+      <h2>A 402-parameter network nails the bulk, and ties a threshold at the interface</h2>
+      <div class="sec-ref">Fig. 5<br>Table 2</div>
+    </div>
+    <div class="g12 row">
+      <div class="c1-5">
+        <p>Each atom gets a fingerprint of how its neighbors are arranged. Steinhardt bond-order parameters project the directions to the neighbors within r_q = 1.5 onto spherical harmonics of order 4 and 6. The result is large and characteristic in a crystal (perfect FCC: q4 = 0.191, q6 = 0.575) and small in a liquid. Averaging over the atom and its neighbors (q̄4, q̄6) separates the two much more sharply (Fig. 5).</p>
+        <p>The five features [q̄4, q̄6, q4, q6, coordination] feed an MLP 5-16-16-2 with ReLU, 402 parameters, trained in PyTorch on crystals and liquids generated by the project's own code. It is exported to a C header and run as a hand-written C forward pass that matches PyTorch to 1.8e-15. The baseline is one threshold: q̄6 &gt; 0.308.</p>
+        <div class="readouts two" style="margin-top:32px">
+          <div class="ro"><div data-count class="ro-val acc">99.94<small>%</small></div><div class="ro-lab">held-out bulk state points, MLP (threshold 99.88%)</div></div>
+          <div class="ro"><div class="ro-val">73.7<small>vs</small>75.0<small>%</small></div><div class="ro-lab">within 1 σ of a crystal/liquid interface, MLP vs threshold</div></div>
+        </div>
+      </div>
+      <div class="c7-12">
+        <figure class="fig" data-reveal>
+          <img src="media/feature_space.jpg" width="1500" height="630" loading="lazy" alt="Scatter of qbar4 against qbar6 for training and held-out state points: liquid atoms cluster low in orange, crystal atoms high in blue, with the qbar6 threshold 0.308 between them.">
+          <figcaption class="figcap"><span class="fn">Fig. 5</span>q̄4 against q̄6 per atom, training state points (left) and held-out state points (right). In this figure liquid is orange and crystal is blue; the dashed line is the threshold 0.308.</figcaption>
+        </figure>
+        <div class="tscroll" style="margin-top:36px">
+          <p class="tcap"><span class="fn">Table 2</span>Accuracy of the MLP and the q̄6 threshold.</p>
+          <table class="tbl">
+            <thead><tr><th>Test set</th><th class="n">Atoms</th><th class="n">MLP</th><th class="n nt">q̄6 &gt; 0.308</th></tr></thead>
+            <tbody>
+              <tr><td class="k">Training state points (12)</td><td class="n">279,936</td><td class="n">99.80%</td><td class="n">99.62%</td></tr>
+              <tr><td class="k">Held-out bulk state points (6)</td><td class="n">139,968</td><td class="n hi">99.94%</td><td class="n">99.88%</td></tr>
+              <tr><td class="k">Slab, all atoms</td><td class="n">49,152</td><td class="n">95.4%</td><td class="n">95.7%</td></tr>
+              <tr><td class="k">Slab, within 1 σ of the interface</td><td class="n">7,533</td><td class="n">73.7%</td><td class="n hi">75.0%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small ink2" style="margin-top:14px">In bulk the MLP makes half as many errors as the threshold. At an interface it does not beat it: with these five features, nearly all the information is in q̄6.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 05 GROWTH ======================= -->
+<section class="block" id="growth">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">05</span><span class="lbl">Growth</span></div>
+      <h2>The seed grew to 428,505 atoms, and nothing else froze</h2>
+      <div class="sec-ref">Fig. 6 to 9<br>Table 3</div>
+      <p class="lede">The analysis ran at all 974 analysis steps and tracked the largest crystalline cluster from about 600 atoms at release to 41% of the box. Hover or drag across Fig. 6 and 7 to read the values.</p>
+    </div>
+    <div class="g12 row">
+      <div class="c1-8">
+        <figure class="fig">
+          <div class="chart-head">
+            <h3>Largest crystal, n_max(t)</h3>
+            <div class="legend"><span><i style="border-color:var(--acc)"></i>MLP labels</span><span><i class="dash" style="border-color:var(--ink)"></i>q̄6 &gt; 0.308</span></div>
+          </div>
+          <div class="chart" id="ch-nmax"></div>
+          <figcaption class="figcap"><span class="fn">Fig. 6</span>Atoms in the largest crystalline cluster against time, log scale. The second-largest cluster never exceeded 34 atoms (MLP) or 43 atoms (threshold).</figcaption>
+        </figure>
+        <figure class="fig" style="margin-top:36px">
+          <div class="chart-head"><h3>Crystalline fraction of all atoms</h3></div>
+          <div class="chart" id="ch-frac"></div>
+          <figcaption class="figcap"><span class="fn">Fig. 7</span>Fraction of all 1,048,576 atoms labeled crystalline, same two label sets as Fig. 6.</figcaption>
+        </figure>
+      </div>
+      <figure class="c9-12 fig">
+        <div class="snaps" id="snaps">
+          <figure class="snap" data-t="150"><img src="media/crystal_t150.jpg" width="1280" height="720" loading="lazy" alt="Rendered crystalline atoms at t = 150: a small lobed crystal at the box center."><figcaption>(a) t = 150</figcaption></figure>
+          <figure class="snap" data-t="300"><img src="media/crystal_t300.jpg" width="1280" height="720" loading="lazy" alt="Rendered crystalline atoms at t = 300: n_max 80,322 by the MLP."><figcaption>(b) t = 300</figcaption></figure>
+          <figure class="snap" data-t="485"><img src="media/crystal_t485.jpg" width="1280" height="720" loading="lazy" alt="Rendered crystalline atoms at t = 485: the crystal fills much of the box and reaches its periodic images."><figcaption>(c) t = 485</figcaption></figure>
+        </div>
+        <figcaption class="figcap"><span class="fn">Fig. 8</span>Crystalline atoms only (MLP label), colored by distance from the seed center; grey: crystalline atoms outside the largest cluster. Rendered with OVITO. The frame nearest the cursor in Fig. 6 is outlined.</figcaption>
+      </figure>
+    </div>
+    <div class="g12 row" style="margin-top:56px">
+      <figure class="c1-7 fig">
+        <video src="media/nucleation_crystal.mp4" poster="media/nucleation_crystal_poster.jpg" autoplay muted loop playsinline preload="metadata" width="1280" height="720" aria-label="Movie of the crystal growing from the seed, camera turning about the box."></video>
+        <figcaption class="figcap"><span class="fn">Fig. 9</span>The crystal growing from the seed, 97 in situ movie frames from t = 5 to t = 485.</figcaption>
+      </figure>
+      <div class="c8-12">
+        <ul class="facts">
+          <li><b>No other nucleus formed.</b> After the release, the second-largest cluster never exceeded 34 atoms (MLP) or 43 atoms (threshold).</li>
+          <li><b>Growth like t³, not exponential.</b> After t of about 200 the cube root of n_max grows almost linearly: the interface moves at a roughly constant speed.</li>
+          <li><b>The threshold always finds more.</b> Its cluster is 5 to 23% larger from t = 100 on. The surplus sits on the crystal surface and at defects between lobes.</li>
+          <li><b>Cut short, not finished.</b> The 1-hour debug queue limit stopped the run at step 97,400 of 112,000, with the crystal still growing.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tscroll" style="margin-top:56px">
+      <p class="tcap"><span class="fn">Table 3</span>n_max and crystalline fraction at selected times.</p>
+      <table class="tbl" id="growth-table">
+        <thead><tr><th class="nt">t (LJ time)</th><th class="n nt">n_max, MLP</th><th class="n nt">n_max, q̄6 &gt; 0.308</th><th class="n">Crystalline fraction, MLP</th></tr></thead>
+        <tbody>
+          <tr><td class="v">40 (seed release)</td><td class="n">594</td><td class="n">606</td><td class="n">0.09%</td></tr>
+          <tr><td class="v">100</td><td class="n">2,157</td><td class="n">2,529</td><td class="n">0.25%</td></tr>
+          <tr><td class="v">200</td><td class="n">17,642</td><td class="n">20,522</td><td class="n">1.7%</td></tr>
+          <tr><td class="v">300</td><td class="n">80,322</td><td class="n">88,787</td><td class="n">7.7%</td></tr>
+          <tr><td class="v">400</td><td class="n">227,444</td><td class="n">244,689</td><td class="n">21.7%</td></tr>
+          <tr><td class="v">487 (last)</td><td class="n ice">428,505</td><td class="n">452,021</td><td class="n ice">40.9%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 06 EXACTNESS ======================= -->
+<section class="block" id="exact">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">06</span><span class="lbl">Exactness</span></div>
+      <h2>In situ labels match post hoc labels, exactly</h2>
+      <div class="sec-ref">Fig. 10</div>
+    </div>
+    <div class="g12 row">
+      <div class="c1-5">
+        <div class="ro big"><div class="ro-val">0</div><div class="ro-lab">mismatches in 7,104,000 atom labels</div></div>
+      </div>
+      <div class="c6-12">
+        <p>The same seeded run was analyzed twice: in situ, and post hoc from a full dump. Two rank layouts, 3,552,000 atom labels each. Both label sets, the membership of the largest cluster, and n_max agree at every one of the 111 analysis steps (Fig. 10).</p>
+        <p>It is exact because of the 3.0 halo. In a unit test with a halo of only r_q = 1.5, q6 was still exact but q̄6 was wrong by up to 1.7e-2 at the subdomain edges.</p>
+        <figure class="fig" style="margin-top:24px">
+          <div class="steps111" id="steps111" aria-label="111 of 111 analysis steps matched in each layout"></div>
+          <figcaption class="figcap"><span class="fn">Fig. 10</span>One mark per analysis step, for each rank layout: 111 of 111 steps match.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 07 SPEED ======================= -->
+<section class="block" id="speed">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">07</span><span class="lbl">Speed</span></div>
+      <h2>One P100 beats a core 33 to 43x, but the whole node only 2.4 to 3.4x</h2>
+      <div class="sec-ref">Fig. 11, 12<br>job 14364484</div>
+    </div>
+    <div class="g12 row">
+      <div class="c1-5">
+        <p>The fair comparison is the whole node. With forces on the GPU, the force call takes 16 to 23 ns per atom, and the host work around it (integration, halo packing, migration, on one core per rank) is 53 to 67% of the 1-GPU step. That host part grows faster than the force part, so the GPU advantage shrinks at large N (Fig. 11).</p>
+        <p>Going from 1 to 2 P100s at 1,048,576 atoms halves the force call (16.3 to 8.7 ms) but not the host part, so strong scaling reaches 1.70x.</p>
+        <div class="readouts two" style="margin-top:32px">
+          <div class="ro"><div class="ro-val">33<small>to</small>43<small>x</small></div><div class="ro-lab">1 P100 vs 1 CPU core</div></div>
+          <div class="ro"><div class="ro-val acc">2.4<small>to</small>3.4<small>x</small></div><div class="ro-lab">1 P100 vs all 20 cores</div></div>
+          <div class="ro"><div class="ro-val">53<small>to</small>67<small>%</small></div><div class="ro-lab">of a 1-GPU step is host work</div></div>
+          <div class="ro"><div data-count class="ro-val">1.70<small>x</small></div><div class="ro-lab">2 P100 vs 1, efficiency 0.85</div></div>
+        </div>
+      </div>
+      <figure class="c7-12 fig">
+        <div class="chart-head">
+          <h3>Time per MD step against system size</h3>
+          <div class="legend"><span><i style="border-color:var(--acc)"></i>GPU</span><span><i class="thin" style="border-color:var(--ink)"></i>CPU cores</span></div>
+        </div>
+        <div class="chart" id="ch-speed"></div>
+        <figcaption class="figcap"><span class="fn">Fig. 11</span>Milliseconds per MD step against atoms N, log-log. Job 14364484, cell-order kernel, one node with 2 Tesla P100 and 2 x 10 Xeon cores. Mean of repeats.</figcaption>
+      </figure>
+    </div>
+
+    <h3 style="margin-top:80px;font-size:clamp(22px,2.2vw,28px);max-width:32ch">The kernel bug: threads in memory order got slower as the liquid diffused</h3>
+    <div class="story">
+      <div class="st">
+        <div class="tag lbl">Symptom</div>
+        <div class="big">22.8<span class="ar">&rarr;</span>32<small>ms</small></div>
+        <p>Along the production protocol the step time rose over the first ~7,000 steps and then stayed high. All of the rise was in the GPU force call: 10.3 to 19.4 ms per rank. Host work and MPI did not change.</p>
+      </div>
+      <figure class="st">
+        <div class="tag lbl">Cause</div>
+        <svg viewBox="0 0 260 104" aria-hidden="true" id="warp-cause"></svg>
+        <p>One thread per atom in host array order. At the start that order is the FCC lattice, so the 32 threads of a warp read the same few cells. As the liquid diffuses, array order stops matching space: each thread walks different cells, with poor cache reuse and divergent loops.</p>
+        <figcaption class="figcap"><span class="fn">Fig. 12</span>Eight threads of a warp and the cells they read, in memory order and in cell order.</figcaption>
+      </figure>
+      <div class="st">
+        <div class="tag lbl">Fix</div>
+        <div class="big">31.8<span class="ar">&rarr;</span>18.7<small>ms</small></div>
+        <p>Thread s handles atom <code>vals[s]</code> of the cell sort the kernel already does, so a warp always covers one region of space. Each atom sums the same cells in the same order: forces are <b>bit-identical</b>. Hold-phase step 1.7x faster, no drift.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 08 COST ======================= -->
+<section class="block" id="cost">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">08</span><span class="lbl">Cost</span></div>
+      <h2>Analysis costs about 1 ms per step, if it has enough ranks</h2>
+      <div class="sec-ref">Fig. 13<br>jobs 14364486, 14362880, 14363659</div>
+      <p class="lede">Production layout, 1,048,576 atoms, analysis every 100 steps, on and off interleaved in the same job, 3 repeats each. The SIM ranks never waited for the ANA ranks, except when there was only one (Fig. 13).</p>
+    </div>
+    <figure class="fig">
+      <div class="cost" data-reveal>
+        <div class="cb">
+          <div><div class="who">4 ANA ranks, same node as the GPUs<span>cell-order kernel, job 14364486</span></div><div class="pct">+5.2<small>% &plusmn; 1.1</small></div></div>
+          <div class="bars">
+            <div class="bar"><span class="bl">off</span><div class="bt"><div class="bf off" style="width:53.17%">18.61</div></div></div>
+            <div class="bar"><span class="bl">on</span><div class="bt"><div class="bf on" style="width:55.94%">19.58</div></div></div>
+          </div>
+        </div>
+        <div class="cb">
+          <div><div class="who">4 ANA ranks on a separate node<span>original kernel, job 14362880</span></div><div class="pct">+0.2<small>% &plusmn; 0.3, noise</small></div></div>
+          <div class="bars">
+            <div class="bar"><span class="bl">off</span><div class="bt"><div class="bf off" style="width:71.8%">25.13</div></div></div>
+            <div class="bar"><span class="bl">on</span><div class="bt"><div class="bf on" style="width:71.94%">25.18</div></div></div>
+          </div>
+        </div>
+        <div class="cb">
+          <div><div class="who">Only 1 ANA rank<span>original kernel, job 14363659</span></div><div class="pct">+25.2<small>% stall</small></div></div>
+          <div class="bars">
+            <div class="bar"><span class="bl">off</span><div class="bt"><div class="bf off" style="width:71.66%">25.08</div></div></div>
+            <div class="bar"><span class="bl">on</span><div class="bt"><div class="bf on" style="width:89.69%"><span class="stall" style="width:20.1%"></span><span class="val">31.39</span></div></div></div>
+          </div>
+        </div>
+        <div class="bscale"><span></span><div class="bsc"><span></span><div class="ticks"><span style="left:0">0</span><span style="left:28.57%">10</span><span style="left:57.14%">20</span><span style="left:85.71%">30</span><span class="end" style="left:100%">35 ms</span></div></div></div>
+      </div>
+      <figcaption class="figcap"><span class="fn">Fig. 13</span>SIM step time with analysis off (grey) and on (black). The hatched red part is the time the SIM ranks spent blocked on their previous send.</figcaption>
+    </figure>
+    <div class="g12 row" style="margin-top:48px">
+      <div class="c1-5">
+        <div class="rule"><span class="lbl">Rule</span>Give the analysis enough ranks to finish before the next batch arrives: <b>t_analysis &lt; K x step time</b>.</div>
+      </div>
+      <div class="c7-12">
+        <p>With 4 ANA ranks the analysis takes 0.84 s against 1.96 s of MD between analysis steps, and the SIM ranks never wait. With 1 rank it takes 3.08 s against 3.13 s: each SIM rank blocks on its previous send (13.6 s in total) and the step grows 25%.</p>
+        <p>On the same node the cost comes from sharing cores, caches and memory bandwidth, not from the protocol: the SIM-side halo and packing add 0.075 ms per step, and moving the ANA ranks to another node removes the rest.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 09 DISK ======================= -->
+<section class="block" id="disk">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">09</span><span class="lbl">Disk</span></div>
+      <h2>1.85&nbsp;GB on disk instead of 24.5&nbsp;GB</h2>
+      <div class="sec-ref">Fig. 14</div>
+    </div>
+    <div class="g12 row">
+      <div class="c1-5">
+        <p>The labels cost 0.52 bytes per atom per analysis step on average (5 bytes per crystalline atom), against 24 for the dump. Both costs are linear in N, so the ratio does not depend on N. It depends on the crystalline fraction and on K.</p>
+        <p>These are bytes, not seconds. At this N a dump step is 25 MB, which a parallel file system writes in well under a second. The saving is in storage, and it grows with N and with more frequent analysis.</p>
+        <div class="readouts two" style="margin-top:32px">
+          <div class="ro"><div data-count class="ro-val acc">13.2<small>x</small></div><div class="ro-lab">smaller with 97 movie frames</div></div>
+          <div class="ro"><div data-count class="ro-val">46.4<small>x</small></div><div class="ro-lab">smaller, labels and summary only</div></div>
+        </div>
+      </div>
+      <figure class="c7-12 fig">
+        <div class="chart-head">
+          <h3>Bytes written so far</h3>
+          <div class="legend"><span><i style="border-color:var(--ink)"></i>full dump</span><span><i style="border-color:var(--acc)"></i>in situ</span><span><i class="dash" style="border-color:var(--acc)"></i>labels only</span></div>
+        </div>
+        <div class="chart" id="ch-bytes"></div>
+        <figcaption class="figcap"><span class="fn">Fig. 14</span>Cumulative bytes over the production run, log scale, from the columns bytes_insitu and bytes_fulldump of prod_summary.dat. The steps in the in situ curve are the movie frames, one every 1,000 MD steps.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 10 VALIDATION ======================= -->
+<section class="block" id="validation">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">10</span><span class="lbl">Validation</span></div>
+      <h2>Every piece was checked against something independent</h2>
+      <div class="sec-ref">Table 4</div>
+    </div>
+    <div class="g12">
+      <div class="c3-12 tscroll" data-reveal>
+        <p class="tcap"><span class="fn">Table 4</span>Validation checks, all on CARC Discovery.</p>
+        <table class="tbl">
+          <thead><tr><th>Check</th><th>Criterion</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td class="k">GPU vs CPU forces</td><td class="c2">max relative error &lt; 1e-10</td><td class="v">8.0e-14</td></tr>
+            <tr><td class="k">NVE energy drift, thermostat off, 10k steps</td><td class="c2">&lt; 1e-4 per atom</td><td class="v">GPU 1.8e-5, CPU 1.7e-5</td></tr>
+            <tr><td class="k">Liquid g(r), T* = 0.722, ρ* = 0.8442</td><td class="c2">peaks of the standard LJ liquid</td><td class="v">peak 1.085, min 1.535, peak 2.045</td></tr>
+            <tr><td class="k">Thermostat</td><td class="c2">within 1% of target</td><td class="v">mean T 0.72198 vs 0.722</td></tr>
+            <tr><td class="k">Steinhardt features</td><td class="c2">perfect FCC values, invariances</td><td class="v">q4 = 0.19094065, q6 = 0.57452426</td></tr>
+            <tr><td class="k">Classifier</td><td class="c2">&gt; 95% held-out accuracy</td><td class="v">99.94% (threshold 99.88%)</td></tr>
+            <tr><td class="k">C MLP vs PyTorch</td><td class="c2">identical labels</td><td class="v">max logit diff 1.8e-15, 0 of 2000</td></tr>
+            <tr><td class="k">In situ vs post hoc</td><td class="c2">identical labels from a full dump</td><td class="v">0 mismatches in 2 x 3,552,000</td></tr>
+            <tr><td class="k">Analysis does not perturb the trajectory</td><td class="c2">identical energies</td><td class="v">all printed digits, 5000 steps</td></tr>
+            <tr><td class="k">Cell-order kernel vs original kernel</td><td class="c2">identical forces</td><td class="v">all printed digits, 3000 steps</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= 11 LIMITS ======================= -->
+<section class="block" id="limits">
+  <div class="wrap">
+    <div class="sec-head g12">
+      <div class="sec-num"><span class="n">11</span><span class="lbl">Limits</span></div>
+      <h2>What this run did not show, and what comes next</h2>
+      <div class="sec-ref">README &sect;6, &sect;7</div>
+    </div>
+    <div class="g12 lim">
+      <div class="c1-6" style="grid-column:1 / 6">
+        <h3>Limits</h3>
+        <ul>
+          <li><b>GPU scaling stops at 2 P100s.</b> Every GPU number comes from one debug node. Multi-node V100 and A100 jobs were still waiting in the queue when the report was written.</li>
+          <li><b>The production run used the original kernel and was cut short</b> at step 97,400 of 112,000 by the 1-hour debug limit. The fix gives bit-identical forces, so the physics is unaffected.</li>
+          <li><b>At the interface the classifier ties the baseline</b> (73.7% vs 75.0% within 1 σ). Both place the interface 0.5 to 1 σ into the liquid, which inflates n_max by about one surface shell.</li>
+          <li><b>The GPU path is host-bound.</b> Only the forces run on the GPU; host work is 53 to 67% of a 1-GPU step.</li>
+          <li><b>Seeded, not homogeneous, nucleation.</b> The run does not measure a nucleation rate.</li>
+        </ul>
+      </div>
+      <div style="grid-column:7 / 13">
+        <h3>Next steps</h3>
+        <ul>
+          <li><b>Device-resident positions</b> with halo-only transfers, to remove the host work that now limits the step.</li>
+          <li><b>Unseeded nucleation.</b> At T* = 0.55 the liquid nucleates on its own within 15k to 25k hold steps, which gives a rate and the location of spontaneous nuclei.</li>
+          <li><b>An interface-aware classifier</b>, and a parallel cluster search: it runs on the ANA root today and grows with the crystal.</li>
+          <li><b>Multi-node A100 runs</b> with the fixed kernel and ANA ranks on their own nodes.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap g12">
+    <h2>Simulate on GPUs, understand the result in flight, store only what matters.</h2>
+    <div class="colo">
+      <p><b style="color:var(--ink)">Manas Vardhan</b>. Solo project for CSCI 596, Scientific Computing and Visualization, taught by Prof. Aiichiro Nakano. University of Southern California, Fall 2026.</p>
+      <p>The simulation is built on the course MD code <code>pmd.c</code> by Prof. Nakano, and the SIM/ANA split follows the in situ analysis pattern from the course lectures. Computation was done on the Discovery cluster of the USC Center for Advanced Research Computing (CARC).</p>
+      <p>Every number on this page comes from the repository's report, docs and data files.</p>
+    </div>
+    <div class="tlinks">
+      <a href="https://github.com/ManasVardhan/insitu-nucleation-md">Repository<span aria-hidden="true">&rarr;</span></a>
+      <a href="https://github.com/ManasVardhan/insitu-nucleation-md/blob/main/README.md">Full report<span aria-hidden="true">&rarr;</span></a>
+      <a href="https://github.com/ManasVardhan/insitu-nucleation-md/blob/main/README.md#8-reproduce">Reproduce<span aria-hidden="true">&rarr;</span></a>
+    </div>
+  </div>
+</footer>
+
+<script type="application/json" id="data-prod">{"N":1048576,"K":100,"n_rows_total":974,"t":[0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5,24.5,25.5,26.5,27.5,28.5,29.5,30.5,31.5,32.5,33.5,34.5,35.5,36.5,37.5,38.5,39.5,40.5,41.5,42.5,43.5,44.5,45.5,46.5,47.5,48.5,49.5,50.5,51.5,52.5,53.5,54.5,55.5,56.5,57.5,58.5,59.5,60.5,61.5,62.5,63.5,64.5,65.5,66.5,67.5,68.5,69.5,70.5,71.5,72.5,73.5,74.5,75.5,76.5,77.5,78.5,79.5,80.5,81.5,82.5,83.5,84.5,85.5,86.5,87.5,88.5,89.5,90.5,91.5,92.5,93.5,94.5,95.5,96.5,97.5,98.5,99.5,100.5,101.5,102.5,103.5,104.5,105.5,106.5,107.5,108.5,109.5,110.5,111.5,112.5,113.5,114.5,115.5,116.5,117.5,118.5,119.5,120.5,121.5,122.5,123.5,124.5,125.5,126.5,127.5,128.5,129.5,130.5,131.5,132.5,133.5,134.5,135.5,136.5,137.5,138.5,139.5,140.5,141.5,142.5,143.5,144.5,145.5,146.5,147.5,148.5,149.5,150.5,151.5,152.5,153.5,154.5,155.5,156.5,157.5,158.5,159.5,160.5,161.5,162.5,163.5,164.5,165.5,166.5,167.5,168.5,169.5,170.5,171.5,172.5,173.5,174.5,175.5,176.5,177.5,178.5,179.5,180.5,181.5,182.5,183.5,184.5,185.5,186.5,187.5,188.5,189.5,190.5,191.5,192.5,193.5,194.5,195.5,196.5,197.5,198.5,199.5,200.5,201.5,202.5,203.5,204.5,205.5,206.5,207.5,208.5,209.5,210.5,211.5,212.5,213.5,214.5,215.5,216.5,217.5,218.5,219.5,220.5,221.5,222.5,223.5,224.5,225.5,226.5,227.5,228.5,229.5,230.5,231.5,232.5,233.5,234.5,235.5,236.5,237.5,238.5,239.5,240.5,241.5,242.5,243.5,244.5,245.5,246.5,247.5,248.5,249.5,250.5,251.5,252.5,253.5,254.5,255.5,256.5,257.5,258.5,259.5,260.5,261.5,262.5,263.5,264.5,265.5,266.5,267.5,268.5,269.5,270.5,271.5,272.5,273.5,274.5,275.5,276.5,277.5,278.5,279.5,280.5,281.5,282.5,283.5,284.5,285.5,286.5,287.5,288.5,289.5,290.5,291.5,292.5,293.5,294.5,295.5,296.5,297.5,298.5,299.5,300.5,301.5,302.5,303.5,304.5,305.5,306.5,307.5,308.5,309.5,310.5,311.5,312.5,313.5,314.5,315.5,316.5,317.5,318.5,319.5,320.5,321.5,322.5,323.5,324.5,325.5,326.5,327.5,328.5,329.5,330.5,331.5,332.5,333.5,334.5,335.5,336.5,337.5,338.5,339.5,340.5,341.5,342.5,343.5,344.5,345.5,346.5,347.5,348.5,349.5,350.5,351.5,352.5,353.5,354.5,355.5,356.5,357.5,358.5,359.5,360.5,361.5,362.5,363.5,364.5,365.5,366.5,367.5,368.5,369.5,370.5,371.5,372.5,373.5,374.5,375.5,376.5,377.5,378.5,379.5,380.5,381.5,382.5,383.5,384.5,385.5,386.5,387.5,388.5,389.5,390.5,391.5,392.5,393.5,394.5,395.5,396.5,397.5,398.5,399.5,400.5,401.5,402.5,403.5,404.5,405.5,406.5,407.5,408.5,409.5,410.5,411.5,412.5,413.5,414.5,415.5,416.5,417.5,418.5,419.5,420.5,421.5,422.5,423.5,424.5,425.5,426.5,427.5,428.5,429.5,430.5,431.5,432.5,433.5,434.5,435.5,436.5,437.5,438.5,439.5,440.5,441.5,442.5,443.5,444.5,445.5,446.5,447.5,448.5,449.5,450.5,451.5,452.5,453.5,454.5,455.5,456.5,457.5,458.5,459.5,460.5,461.5,462.5,463.5,464.5,465.5,466.5,467.5,468.5,469.5,470.5,471.5,472.5,473.5,474.5,475.5,476.5,477.5,478.5,479.5,480.5,481.5,482.5,483.5,484.5,485.5,486.5,487.0],"step":[100,300,500,700,900,1100,1300,1500,1700,1900,2100,2300,2500,2700,2900,3100,3300,3500,3700,3900,4100,4300,4500,4700,4900,5100,5300,5500,5700,5900,6100,6300,6500,6700,6900,7100,7300,7500,7700,7900,8100,8300,8500,8700,8900,9100,9300,9500,9700,9900,10100,10300,10500,10700,10900,11100,11300,11500,11700,11900,12100,12300,12500,12700,12900,13100,13300,13500,13700,13900,14100,14300,14500,14700,14900,15100,15300,15500,15700,15900,16100,16300,16500,16700,16900,17100,17300,17500,17700,17900,18100,18300,18500,18700,18900,19100,19300,19500,19700,19900,20100,20300,20500,20700,20900,21100,21300,21500,21700,21900,22100,22300,22500,22700,22900,23100,23300,23500,23700,23900,24100,24300,24500,24700,24900,25100,25300,25500,25700,25900,26100,26300,26500,26700,26900,27100,27300,27500,27700,27900,28100,28300,28500,28700,28900,29100,29300,29500,29700,29900,30100,30300,30500,30700,30900,31100,31300,31500,31700,31900,32100,32300,32500,32700,32900,33100,33300,33500,33700,33900,34100,34300,34500,34700,34900,35100,35300,35500,35700,35900,36100,36300,36500,36700,36900,37100,37300,37500,37700,37900,38100,38300,38500,38700,38900,39100,39300,39500,39700,39900,40100,40300,40500,40700,40900,41100,41300,41500,41700,41900,42100,42300,42500,42700,42900,43100,43300,43500,43700,43900,44100,44300,44500,44700,44900,45100,45300,45500,45700,45900,46100,46300,46500,46700,46900,47100,47300,47500,47700,47900,48100,48300,48500,48700,48900,49100,49300,49500,49700,49900,50100,50300,50500,50700,50900,51100,51300,51500,51700,51900,52100,52300,52500,52700,52900,53100,53300,53500,53700,53900,54100,54300,54500,54700,54900,55100,55300,55500,55700,55900,56100,56300,56500,56700,56900,57100,57300,57500,57700,57900,58100,58300,58500,58700,58900,59100,59300,59500,59700,59900,60100,60300,60500,60700,60900,61100,61300,61500,61700,61900,62100,62300,62500,62700,62900,63100,63300,63500,63700,63900,64100,64300,64500,64700,64900,65100,65300,65500,65700,65900,66100,66300,66500,66700,66900,67100,67300,67500,67700,67900,68100,68300,68500,68700,68900,69100,69300,69500,69700,69900,70100,70300,70500,70700,70900,71100,71300,71500,71700,71900,72100,72300,72500,72700,72900,73100,73300,73500,73700,73900,74100,74300,74500,74700,74900,75100,75300,75500,75700,75900,76100,76300,76500,76700,76900,77100,77300,77500,77700,77900,78100,78300,78500,78700,78900,79100,79300,79500,79700,79900,80100,80300,80500,80700,80900,81100,81300,81500,81700,81900,82100,82300,82500,82700,82900,83100,83300,83500,83700,83900,84100,84300,84500,84700,84900,85100,85300,85500,85700,85900,86100,86300,86500,86700,86900,87100,87300,87500,87700,87900,88100,88300,88500,88700,88900,89100,89300,89500,89700,89900,90100,90300,90500,90700,90900,91100,91300,91500,91700,91900,92100,92300,92500,92700,92900,93100,93300,93500,93700,93900,94100,94300,94500,94700,94900,95100,95300,95500,95700,95900,96100,96300,96500,96700,96900,97100,97300,97400],"nmax_mlp":[819,506,447,408,402,391,400,417,404,417,415,412,407,396,403,394,403,385,409,412,409,403,400,388,385,395,406,410,408,443,449,449,465,499,490,511,543,579,587,577,535,514,503,514,510,580,576,604,626,627,624,645,688,685,777,748,686,715,794,777,786,785,763,780,859,873,875,894,941,1032,992,1082,1162,1257,1285,1277,1305,1362,1358,1360,1480,1421,1446,1553,1654,1649,1671,1652,1736,1878,1763,1901,1914,2013,2004,2015,2017,2105,2028,2232,2224,2296,2433,2458,2541,2601,2597,2805,2851,2956,2986,3122,3349,3332,3402,3383,3552,3562,3810,3754,3926,3975,4069,4077,4339,4430,4412,4408,4575,4622,4716,4844,4922,5152,5270,5360,5306,5492,5605,5582,5785,5933,5952,6128,5976,6415,6445,6568,6703,6853,7000,7215,7381,7350,7491,7594,7791,7816,7960,8245,8364,8486,8640,8814,8943,9059,9439,9385,9550,9609,10108,10065,10239,10766,10819,10877,11054,11441,11538,11882,11787,12175,12627,12478,12845,13272,13471,13548,14213,14111,14515,15040,15173,15663,15911,16181,16797,16877,17314,17455,17934,18290,18272,18901,19312,19809,20167,20402,20327,20793,21508,21613,22410,22493,22960,22998,23689,24122,24549,25265,25630,25945,26303,27261,27556,27887,28462,28714,29276,30220,30201,30959,31548,32052,32755,33404,33903,33813,34470,34858,35208,36050,36744,37467,37405,38288,39144,39378,40021,40833,41561,42054,42861,43210,43753,44216,44843,45403,46487,47360,47792,47899,49096,49563,50799,51404,51785,52748,53312,54627,54860,56107,56630,57796,58291,58875,59617,60726,61161,62687,63164,63944,64630,65289,66152,66580,67666,68978,69451,70777,70918,71991,73615,74634,75206,76262,77495,78547,78664,79578,81304,81937,82855,84015,85026,86389,86926,87960,89046,89687,91536,92626,93463,95229,96041,97841,98518,99805,101333,102499,103079,104352,105462,106544,107467,108655,109650,111063,112317,113119,113887,115437,115920,116866,118762,120154,121345,123196,124303,125083,125998,127625,129252,130450,131615,133254,134856,136436,138402,139729,140937,142721,143810,145006,146484,148102,149862,151391,153208,154546,156874,157932,159658,160935,163005,164647,166460,167654,169050,170874,172644,174878,176879,178570,180393,181918,183840,186002,187022,189103,190874,193339,195094,196299,197653,200264,202194,204104,206457,208410,209153,211855,213246,215772,216938,218566,220751,222806,224324,225969,228242,229827,230872,234236,236065,238006,240213,241605,244630,246677,248909,251109,253119,254882,257214,259773,261313,264193,266372,268109,270460,273778,275946,277680,279122,282289,284794,286010,289037,290105,292928,294289,297449,299157,301687,303093,305607,307086,310638,313151,314805,316816,318944,322347,324931,326485,329514,332055,333450,336774,339192,341396,344658,346036,348799,352351,354619,356393,357945,361441,362957,366162,367667,370007,372529,375348,377079,378777,381078,384105,386337,389386,392934,395254,397674,399306,401758,404656,407227,409737,411593,414479,416689,420098,422840,425307,427214,428505],"nmax_thr":[671,456,405,365,373,356,367,383,369,372,376,373,368,365,376,356,357,356,368,377,377,372,366,364,360,366,380,373,376,406,422,437,443,478,492,513,528,567,585,575,564,599,605,632,663,686,696,719,748,794,793,786,833,842,897,882,877,917,954,946,966,985,948,973,1061,1086,1064,1085,1147,1213,1248,1289,1363,1449,1521,1481,1534,1604,1631,1676,1699,1748,1750,1848,1912,1910,1954,1967,2038,2121,2080,2152,2258,2384,2369,2330,2373,2482,2456,2530,2547,2604,2781,2819,2961,3020,3101,3206,3274,3453,3465,3708,3738,3857,3979,3981,4121,4234,4372,4485,4615,4628,4792,4755,4928,5073,5030,5155,5299,5380,5575,5691,5808,5939,6109,6243,6210,6377,6510,6552,6698,6975,7006,7128,7123,7405,7532,7667,7812,8036,8069,8275,8458,8532,8743,8924,9211,9268,9436,9604,9838,10133,10260,10560,10598,10813,10949,10993,11257,11492,11829,11940,12093,12610,12750,12997,13232,13472,13743,13819,14021,14371,14562,14656,14866,15484,15665,15952,16510,16581,16969,17470,17736,18090,18590,18841,19277,19576,20036,20460,20855,21121,21438,21957,22372,22885,23048,23425,23686,24268,24807,25140,25727,26111,26697,26912,27546,28037,28659,29049,29518,29907,30264,31222,31635,32043,32479,32737,33398,34068,34372,35146,35631,36389,36908,37366,37882,38472,39031,39446,39771,40726,41346,41803,42571,43241,43898,44426,45385,45965,46711,47433,47877,48621,49448,50344,50713,51602,52439,53229,53748,54206,55128,56130,56598,57687,58519,59322,60214,61251,61992,63037,63966,64591,65658,66490,67403,67820,68542,69510,70362,71262,72510,73149,73899,74652,75570,76647,77531,78708,79569,80410,81729,82698,83397,84617,85944,86816,87399,88334,89595,90488,91649,92758,93961,95168,96072,97378,98613,99723,100942,102226,103193,104608,105605,107313,108210,109713,111014,112054,113373,114223,115872,116861,118111,119313,120251,121960,123081,124197,125194,126454,127670,128556,129977,131331,132913,134524,135904,137312,138323,139574,141371,142772,144425,145692,147531,148712,150865,152562,153558,155058,156554,158027,159786,161639,163105,164737,166700,168258,170392,172262,173733,175255,177058,178932,180596,182069,183485,185581,187634,189330,191609,193324,195317,197275,198958,201198,202555,204941,206550,209018,211299,212512,214328,216333,218520,220587,222616,224390,226248,228628,229857,232429,234324,236052,237875,240231,241866,243277,245765,247283,249229,251809,253937,256034,258095,259901,262735,264897,267520,269546,272000,273649,276427,278791,281011,283775,285734,287618,290259,293088,295126,297008,299294,302001,304396,306273,308499,310647,313264,315056,317504,319275,321954,323801,326472,328055,331256,333845,335428,337856,340241,343319,345657,347489,350245,352699,355333,358066,361016,363236,365982,368390,370715,373793,376320,378067,380620,383230,385250,387499,390095,391977,395081,397592,399798,402083,404168,407149,409161,412415,415401,418269,420482,423487,425193,428381,430258,433045,435301,437842,440692,443543,446078,448577,450695,452021],"ncr_mlp":[53424,633,534,499,483,482,485,501,486,487,498,491,490,481,482,484,499,457,504,483,505,509,496,474,469,489,480,513,503,531,564,567,613,638,707,751,880,890,934,919,872,857,890,923,914,976,1010,1004,1031,996,1046,1029,1113,1124,1136,1144,1075,1149,1197,1156,1121,1143,1168,1179,1259,1323,1310,1286,1328,1403,1415,1475,1536,1652,1705,1654,1702,1760,1748,1755,1874,1827,1833,1979,2013,2146,2102,2039,2142,2284,2140,2258,2327,2471,2425,2417,2410,2504,2437,2609,2624,2712,2880,2918,2952,3022,3011,3187,3274,3373,3397,3562,3759,3702,3818,3778,3976,3947,4176,4121,4352,4368,4472,4512,4788,4837,4859,4794,5025,5029,5096,5251,5349,5593,5698,5796,5708,5919,6017,6043,6221,6377,6319,6506,6363,6783,6871,6982,7129,7290,7382,7614,7766,7776,7882,7977,8153,8261,8333,8648,8764,8910,9045,9236,9286,9470,9843,9808,10018,10016,10545,10466,10668,11225,11185,11273,11492,11903,11933,12264,12159,12554,13068,12856,13229,13741,13884,13936,14606,14517,14940,15419,15640,16102,16340,16606,17200,17284,17706,17812,18301,18651,18697,19338,19768,20234,20667,20853,20785,21265,21865,22011,22833,22921,23398,23406,24080,24524,24961,25662,26027,26374,26691,27708,27991,28329,28862,29125,29682,30613,30666,31422,31937,32439,33166,33816,34331,34258,34866,35237,35621,36425,37098,37926,37796,38645,39561,39816,40399,41232,41978,42417,43247,43612,44168,44629,45232,45865,46965,47779,48216,48341,49527,49973,51191,51840,52178,53145,53706,55048,55280,56567,57081,58229,58802,59311,60085,61188,61591,63075,63598,64380,65059,65722,66531,67015,68098,69359,69899,71176,71421,72457,74027,75039,75627,76711,77939,78935,79102,80045,81729,82351,83280,84408,85461,86776,87368,88379,89461,90046,91951,93056,93895,95607,96485,98274,98986,100206,101796,102902,103500,104828,105872,107002,107894,109081,110081,111429,112692,113487,114231,115842,116375,117249,119158,120611,121824,123592,124752,125479,126439,128013,129701,130878,132048,133659,135293,136903,138799,140153,141384,143195,144231,145426,146916,148503,150324,151791,153581,155002,157321,158347,160071,161355,163441,165096,166879,168082,169487,171298,173043,175292,177307,178973,180819,182288,184245,186400,187494,189441,191259,193765,195516,196673,198067,200658,202595,204524,206834,208785,209547,212275,213667,216200,217376,218945,221190,223198,224793,226388,228683,230251,231268,234634,236492,238456,240614,242039,245049,247073,249330,251569,253574,255317,257598,260188,261718,264649,266740,268474,270837,274198,276342,278103,279569,282724,285260,286456,289486,290525,293323,294669,297850,299542,302057,303499,306000,307509,311094,313575,315184,317216,319338,322743,325399,326916,329945,332507,333839,337150,339631,341836,345047,346448,349171,352743,355008,356775,358385,361877,363424,366582,368104,370428,372902,375710,377499,379153,381484,384531,386725,389766,393301,395681,398049,399730,402139,405088,407602,410092,411948,414818,417045,420521,423197,425672,427653,428863],"ncr_thr":[12860,458,405,366,374,356,367,384,370,372,378,373,368,366,376,357,359,356,368,377,378,373,366,365,360,367,380,374,377,407,432,446,456,503,587,708,806,872,883,876,901,967,971,1030,1048,1048,1093,1084,1134,1201,1177,1146,1220,1228,1253,1269,1273,1302,1341,1303,1276,1364,1363,1339,1447,1549,1505,1489,1489,1581,1647,1667,1744,1810,1921,1871,1869,1972,1995,2094,2125,2119,2093,2255,2279,2350,2352,2347,2419,2483,2457,2563,2646,2814,2751,2752,2756,2848,2838,2948,2963,3054,3208,3266,3321,3433,3536,3541,3691,3834,3866,4055,4095,4267,4292,4398,4515,4603,4735,4832,5013,5039,5234,5180,5348,5495,5431,5493,5737,5818,5947,6110,6166,6343,6516,6612,6653,6776,6871,7011,7094,7386,7387,7479,7479,7742,7853,8035,8197,8416,8403,8661,8803,8917,9099,9298,9578,9679,9811,9994,10210,10492,10627,10929,10982,11178,11340,11398,11683,11884,12168,12273,12498,13028,13121,13344,13553,13816,14157,14176,14424,14731,14948,15014,15197,15890,16006,16294,16904,16935,17354,17870,18154,18445,19019,19204,19654,19924,20381,20755,21215,21430,21835,22362,22708,23297,23531,23788,24139,24670,25172,25535,26050,26490,27080,27289,27899,28400,29013,29441,29886,30355,30673,31602,32009,32423,32799,33094,33801,34449,34777,35572,36011,36773,37266,37761,38271,38893,39316,39788,40122,41048,41700,42155,42907,43573,44258,44817,45722,46294,47079,47785,48230,49055,49819,50747,51100,51970,52786,53555,54167,54561,55524,56554,56987,58070,58883,59724,60617,61650,62387,63385,64385,64977,66108,66900,67809,68258,68926,69853,70793,71598,72842,73495,74239,74991,75945,77002,77840,79017,79988,80837,82104,83030,83746,84959,86302,87184,87774,88716,89898,90788,91994,93042,94276,95508,96384,97731,98889,100022,101268,102543,103530,104930,105976,107740,108594,110129,111388,112418,113700,114620,116219,117230,118439,119651,120568,122309,123377,124484,125490,126773,128007,128894,130286,131668,133247,134815,136222,137617,138628,139875,141691,143066,144730,146019,147874,149030,151171,152846,153850,155424,156860,158329,160107,161957,163435,165040,166977,168570,170743,172584,174028,175600,177363,179261,180919,182336,183743,185922,187911,189623,191913,193613,195621,197531,199242,201457,202858,205219,206817,209302,211604,212827,214598,216603,218780,220849,222909,224657,226538,228882,230161,232698,234598,236338,238179,240529,242200,243550,246056,247551,249481,252049,254193,256311,258377,260170,262975,265112,267752,269810,272290,273907,276671,279047,281232,284015,285988,287855,290481,293334,295348,297247,299530,302273,304667,306529,308719,310884,313489,315274,317756,319510,322189,324037,326716,328277,331489,334071,335598,338062,340482,343539,345925,347741,350469,352948,355552,358289,361260,363470,366178,368610,370881,373994,376535,378238,380873,383429,385500,387730,390312,392179,395291,397829,399968,402260,404367,407337,409314,412590,415578,418461,420652,423656,425324,428574,430420,433191,435448,437971,440866,443687,446221,448721,450875,452167],"n2_mlp":[329,5,2,2,3,3,4,2,2,2,2,4,2,3,2,3,3,2,4,3,2,3,2,2,3,5,2,3,5,2,4,6,2,6,6,4,6,6,8,8,5,8,7,7,7,6,7,9,12,8,14,6,9,9,8,7,10,10,7,9,5,5,5,7,12,17,11,7,9,6,9,8,9,6,8,7,7,7,5,12,9,9,12,8,7,22,12,10,9,12,8,8,9,8,11,7,8,7,7,9,7,9,11,17,11,8,12,12,13,9,9,16,15,5,7,8,10,7,7,11,10,9,14,10,16,9,12,7,15,7,10,20,7,13,8,14,10,8,9,9,18,9,7,11,8,10,9,11,10,6,5,7,6,10,8,7,7,6,9,7,7,9,9,13,6,6,8,9,12,15,9,8,14,15,9,8,12,8,6,9,12,8,20,7,8,10,10,7,7,14,9,10,13,8,11,9,12,8,11,7,11,11,8,7,9,7,12,9,13,7,20,7,11,6,11,7,6,7,5,6,8,9,13,6,9,12,8,7,8,6,8,13,12,7,6,7,11,7,6,8,6,7,6,6,5,8,8,8,6,9,8,6,7,6,10,6,9,9,9,12,7,8,8,10,11,9,6,8,14,12,9,15,34,18,12,9,12,15,8,11,8,10,8,6,6,7,12,6,8,8,7,10,11,6,6,6,9,5,7,9,11,7,9,5,7,22,10,10,12,8,10,7,8,17,9,6,10,11,12,8,6,29,12,13,11,11,10,12,7,11,10,8,9,7,11,8,10,8,10,7,7,10,13,9,8,10,7,10,5,7,4,14,7,8,7,8,11,7,6,8,9,13,6,11,12,9,10,8,6,8,11,6,9,10,8,9,12,6,8,5,10,8,9,8,11,5,7,11,8,7,6,9,11,8,10,11,6,5,8,5,6,6,6,10,14,19,10,8,11,7,8,8,6,16,9,8,5,9,10,7,7,10,6,12,9,9,8,10,7,9,12,12,7,6,8,8,10,8,8,6,13,8,15,10,23,12,6,9,12,5,9,10,7,9,5,17,8,5,7,7,6,11,12,7,8,9,6,9,7,8,12,8,10,7,9,11,7,7,8,5,6,6,8,23,6,7,12,4],"gb_insitu":[0.00028,0.0003,0.0003,0.00031,0.00031,0.01395,0.01395,0.01396,0.01397,0.01397,0.02761,0.02761,0.02762,0.02762,0.02763,0.04126,0.04127,0.04127,0.04128,0.04129,0.05492,0.05493,0.05493,0.05494,0.05494,0.06858,0.06858,0.06859,0.0686,0.0686,0.08224,0.08224,0.08225,0.08226,0.08227,0.09591,0.09592,0.09593,0.09594,0.09595,0.1096,0.10961,0.10962,0.10964,0.10965,0.1233,0.12331,0.12333,0.12334,0.12336,0.137,0.13702,0.13703,0.13705,0.13707,0.15071,0.15073,0.15075,0.15076,0.15078,0.16443,0.16445,0.16446,0.16448,0.1645,0.17815,0.17817,0.17818,0.1782,0.17822,0.19187,0.19189,0.19192,0.19194,0.19196,0.20561,0.20564,0.20566,0.20568,0.20571,0.21936,0.21939,0.21941,0.21944,0.21947,0.23313,0.23315,0.23318,0.23321,0.23324,0.2469,0.24693,0.24696,0.24699,0.24702,0.26069,0.26072,0.26075,0.26078,0.26082,0.27448,0.27452,0.27455,0.27459,0.27463,0.28829,0.28833,0.28837,0.28841,0.28846,0.30213,0.30217,0.30222,0.30227,0.30231,0.31599,0.31604,0.31609,0.31614,0.3162,0.32988,0.32994,0.32999,0.33005,0.33011,0.3438,0.34386,0.34392,0.34398,0.34404,0.35774,0.3578,0.35787,0.35793,0.358,0.37171,0.37178,0.37185,0.37192,0.372,0.38571,0.38578,0.38586,0.38594,0.38602,0.39973,0.39982,0.3999,0.39999,0.40008,0.4138,0.41389,0.41398,0.41408,0.41417,0.4279,0.428,0.4281,0.42821,0.42831,0.44205,0.44216,0.44227,0.44238,0.4425,0.45625,0.45636,0.45648,0.45661,0.45673,0.47049,0.47062,0.47075,0.47088,0.47102,0.48479,0.48493,0.48508,0.48522,0.48537,0.49915,0.4993,0.49946,0.49961,0.49977,0.51357,0.51373,0.5139,0.51408,0.51425,0.52806,0.52825,0.52843,0.52862,0.52882,0.54265,0.54285,0.54306,0.54327,0.54348,0.55733,0.55755,0.55778,0.55801,0.55824,0.57211,0.57235,0.5726,0.57285,0.5731,0.58699,0.58725,0.58752,0.58779,0.58807,0.60198,0.60226,0.60256,0.60285,0.60316,0.61709,0.61741,0.61772,0.61804,0.61837,0.63234,0.63267,0.63301,0.63336,0.63371,0.6477,0.64806,0.64843,0.6488,0.64919,0.6632,0.6636,0.66399,0.6644,0.6648,0.67885,0.67927,0.67969,0.68012,0.68056,0.69464,0.69509,0.69555,0.69601,0.69649,0.7106,0.71108,0.71158,0.71208,0.71259,0.72673,0.72725,0.72778,0.72832,0.72887,0.74305,0.74361,0.74418,0.74475,0.74533,0.75955,0.76015,0.76076,0.76138,0.76201,0.77628,0.77692,0.77758,0.77824,0.77891,0.79322,0.79391,0.7946,0.79531,0.79602,0.81037,0.8111,0.81184,0.81259,0.81334,0.82773,0.82851,0.82929,0.83008,0.83088,0.84532,0.84615,0.84698,0.84782,0.84867,0.86317,0.86404,0.86493,0.86582,0.86672,0.88127,0.88219,0.88312,0.88407,0.88502,0.89962,0.9006,0.90159,0.90259,0.90361,0.91827,0.91931,0.92036,0.92143,0.9225,0.93722,0.93833,0.93944,0.94057,0.94171,0.9565,0.95766,0.95884,0.96003,0.96123,0.97608,0.9773,0.97854,0.97979,0.98105,0.99596,0.99724,0.99854,0.99985,1.00117,1.01613,1.01748,1.01885,1.02023,1.02162,1.03666,1.03807,1.03951,1.04095,1.04242,1.05753,1.05903,1.06054,1.06207,1.06361,1.07881,1.08038,1.08197,1.08358,1.0852,1.10047,1.10212,1.1038,1.10549,1.10719,1.12256,1.1243,1.12606,1.12784,1.12964,1.14508,1.14692,1.14876,1.15062,1.15251,1.16804,1.16996,1.1719,1.17386,1.17584,1.19147,1.19348,1.19552,1.19758,1.19965,1.21537,1.21749,1.21963,1.22178,1.22395,1.23978,1.24199,1.24422,1.24647,1.24875,1.26467,1.26698,1.26931,1.27166,1.27404,1.29006,1.29246,1.29489,1.29734,1.2998,1.31592,1.31843,1.32095,1.3235,1.32607,1.34229,1.3449,1.34754,1.35019,1.35287,1.36921,1.37194,1.37469,1.37746,1.38025,1.3967,1.39954,1.40241,1.4053,1.40821,1.42478,1.42774,1.43072,1.43373,1.43675,1.45343,1.45651,1.45961,1.46273,1.46587,1.48267,1.48585,1.48906,1.49229,1.49554,1.51245,1.51575,1.51907,1.52241,1.52579,1.54282,1.54623,1.54967,1.55314,1.55664,1.57378,1.57732,1.58089,1.58448,1.5881,1.60538,1.60905,1.61275,1.61647,1.62022,1.63762,1.64142,1.64525,1.64909,1.65297,1.67049,1.67442,1.67836,1.68232,1.68631,1.70396,1.708,1.71207,1.71616,1.72027,1.73804,1.7422,1.74639,1.75061,1.75486,1.77277,1.77707,1.7814,1.78575,1.79012,1.80815,1.81258,1.81703,1.82151,1.82602,1.84418,1.84874,1.85103],"gb_labels":[0.00028,0.0003,0.0003,0.00031,0.00031,0.00032,0.00032,0.00033,0.00033,0.00034,0.00034,0.00035,0.00035,0.00036,0.00036,0.00037,0.00038,0.00038,0.00039,0.00039,0.0004,0.0004,0.00041,0.00041,0.00042,0.00042,0.00043,0.00043,0.00044,0.00044,0.00045,0.00045,0.00046,0.00047,0.00048,0.00049,0.0005,0.00051,0.00052,0.00053,0.00055,0.00056,0.00057,0.00059,0.0006,0.00061,0.00063,0.00064,0.00066,0.00067,0.00069,0.0007,0.00072,0.00073,0.00075,0.00077,0.00078,0.0008,0.00082,0.00083,0.00085,0.00087,0.00088,0.0009,0.00092,0.00094,0.00096,0.00097,0.00099,0.00101,0.00103,0.00105,0.00107,0.0011,0.00112,0.00114,0.00116,0.00119,0.00121,0.00124,0.00126,0.00129,0.00131,0.00134,0.00136,0.00139,0.00142,0.00145,0.00147,0.0015,0.00153,0.00156,0.00159,0.00162,0.00166,0.00169,0.00172,0.00175,0.00178,0.00182,0.00185,0.00189,0.00192,0.00196,0.002,0.00203,0.00207,0.00211,0.00215,0.00219,0.00224,0.00228,0.00233,0.00237,0.00242,0.00247,0.00252,0.00257,0.00262,0.00267,0.00272,0.00278,0.00284,0.00289,0.00295,0.00301,0.00307,0.00313,0.00319,0.00325,0.00332,0.00338,0.00345,0.00352,0.00358,0.00366,0.00373,0.0038,0.00387,0.00395,0.00402,0.0041,0.00418,0.00426,0.00434,0.00442,0.0045,0.00459,0.00467,0.00476,0.00485,0.00494,0.00504,0.00513,0.00523,0.00532,0.00542,0.00553,0.00563,0.00573,0.00584,0.00595,0.00606,0.00618,0.00629,0.00641,0.00652,0.00664,0.00677,0.00689,0.00702,0.00715,0.00728,0.00741,0.00755,0.00769,0.00783,0.00797,0.00812,0.00827,0.00842,0.00857,0.00872,0.00888,0.00904,0.0092,0.00937,0.00954,0.00971,0.00989,0.01007,0.01025,0.01044,0.01063,0.01082,0.01102,0.01123,0.01143,0.01164,0.01185,0.01207,0.01229,0.01252,0.01275,0.01298,0.01322,0.01346,0.01371,0.01395,0.01421,0.01447,0.01473,0.015,0.01527,0.01554,0.01582,0.01611,0.0164,0.0167,0.017,0.01731,0.01762,0.01793,0.01826,0.01858,0.01892,0.01925,0.01959,0.01994,0.02029,0.02065,0.02101,0.02138,0.02175,0.02214,0.02252,0.02291,0.02331,0.02372,0.02412,0.02453,0.02495,0.02538,0.02581,0.02625,0.02669,0.02714,0.0276,0.02807,0.02854,0.02902,0.02951,0.03,0.0305,0.03101,0.03153,0.03205,0.03258,0.03311,0.03366,0.03421,0.03477,0.03534,0.03591,0.03649,0.03708,0.03768,0.03829,0.03891,0.03954,0.04017,0.04082,0.04147,0.04214,0.04281,0.04349,0.04418,0.04487,0.04557,0.04628,0.04701,0.04773,0.04848,0.04922,0.04998,0.05074,0.05151,0.05229,0.05308,0.05388,0.05469,0.05552,0.05635,0.05719,0.05804,0.05891,0.05978,0.06067,0.06156,0.06246,0.06337,0.0643,0.06523,0.06618,0.06713,0.0681,0.06908,0.07007,0.07107,0.07209,0.07311,0.07416,0.07521,0.07627,0.07735,0.07844,0.07954,0.08066,0.08179,0.08293,0.08408,0.08525,0.08642,0.08761,0.08881,0.09003,0.09125,0.09249,0.09374,0.095,0.09627,0.09756,0.09886,0.10016,0.10149,0.10282,0.10417,0.10553,0.10691,0.10831,0.10971,0.11113,0.11256,0.11401,0.11548,0.11696,0.11845,0.11996,0.12149,0.12304,0.1246,0.12618,0.12776,0.12937,0.13099,0.13263,0.13428,0.13596,0.13765,0.13936,0.14109,0.14283,0.14459,0.14637,0.14817,0.14998,0.15181,0.15366,0.15552,0.1574,0.15931,0.16122,0.16316,0.16512,0.1671,0.1691,0.17112,0.17316,0.17521,0.17729,0.17938,0.18149,0.18363,0.18579,0.18796,0.19015,0.19236,0.19459,0.19685,0.19912,0.20141,0.20372,0.20605,0.2084,0.21078,0.21317,0.21557,0.218,0.22045,0.22291,0.2254,0.22791,0.23043,0.23297,0.23554,0.23814,0.24075,0.24338,0.24604,0.24872,0.25142,0.25415,0.2569,0.25967,0.26247,0.26529,0.26813,0.27099,0.27388,0.27679,0.27973,0.28269,0.28567,0.28868,0.2917,0.29475,0.29783,0.30093,0.30405,0.30719,0.31035,0.31354,0.31675,0.31998,0.32323,0.32651,0.32981,0.33312,0.33647,0.33985,0.34324,0.34666,0.3501,0.35357,0.35706,0.36058,0.36412,0.36768,0.37127,0.37489,0.37854,0.38221,0.38591,0.38963,0.39338,0.39715,0.40095,0.40478,0.40862,0.4125,0.41639,0.42032,0.42426,0.42822,0.43221,0.43623,0.44027,0.44433,0.44842,0.45254,0.45667,0.46083,0.46503,0.46925,0.4735,0.47777,0.48207,0.4864,0.49075,0.49512,0.49952,0.50395,0.5084,0.51288,0.51739,0.52192,0.52648,0.52877],"gb_full":[0.02517,0.0755,0.12583,0.17616,0.22649,0.27682,0.32716,0.37749,0.42782,0.47815,0.52848,0.57881,0.62915,0.67948,0.72981,0.78014,0.83047,0.8808,0.93114,0.98147,1.0318,1.08213,1.13246,1.1828,1.23313,1.28346,1.33379,1.38412,1.43445,1.48479,1.53512,1.58545,1.63578,1.68611,1.73644,1.78678,1.83711,1.88744,1.93777,1.9881,2.03843,2.08877,2.1391,2.18943,2.23976,2.29009,2.34042,2.39076,2.44109,2.49142,2.54175,2.59208,2.64241,2.69275,2.74308,2.79341,2.84374,2.89407,2.94441,2.99474,3.04507,3.0954,3.14573,3.19606,3.2464,3.29673,3.34706,3.39739,3.44772,3.49805,3.54839,3.59872,3.64905,3.69938,3.74971,3.80004,3.85038,3.90071,3.95104,4.00137,4.0517,4.10203,4.15237,4.2027,4.25303,4.30336,4.35369,4.40402,4.45436,4.50469,4.55502,4.60535,4.65568,4.70602,4.75635,4.80668,4.85701,4.90734,4.95767,5.00801,5.05834,5.10867,5.159,5.20933,5.25966,5.31,5.36033,5.41066,5.46099,5.51132,5.56165,5.61199,5.66232,5.71265,5.76298,5.81331,5.86364,5.91398,5.96431,6.01464,6.06497,6.1153,6.16563,6.21597,6.2663,6.31663,6.36696,6.41729,6.46762,6.51796,6.56829,6.61862,6.66895,6.71928,6.76962,6.81995,6.87028,6.92061,6.97094,7.02127,7.07161,7.12194,7.17227,7.2226,7.27293,7.32326,7.3736,7.42393,7.47426,7.52459,7.57492,7.62525,7.67559,7.72592,7.77625,7.82658,7.87691,7.92724,7.97758,8.02791,8.07824,8.12857,8.1789,8.22923,8.27957,8.3299,8.38023,8.43056,8.48089,8.53123,8.58156,8.63189,8.68222,8.73255,8.78288,8.83322,8.88355,8.93388,8.98421,9.03454,9.08487,9.13521,9.18554,9.23587,9.2862,9.33653,9.38686,9.4372,9.48753,9.53786,9.58819,9.63852,9.68885,9.73919,9.78952,9.83985,9.89018,9.94051,9.99084,10.04118,10.09151,10.14184,10.19217,10.2425,10.29284,10.34317,10.3935,10.44383,10.49416,10.54449,10.59483,10.64516,10.69549,10.74582,10.79615,10.84648,10.89682,10.94715,10.99748,11.04781,11.09814,11.14847,11.19881,11.24914,11.29947,11.3498,11.40013,11.45046,11.5008,11.55113,11.60146,11.65179,11.70212,11.75245,11.80279,11.85312,11.90345,11.95378,12.00411,12.05445,12.10478,12.15511,12.20544,12.25577,12.3061,12.35644,12.40677,12.4571,12.50743,12.55776,12.60809,12.65843,12.70876,12.75909,12.80942,12.85975,12.91008,12.96042,13.01075,13.06108,13.11141,13.16174,13.21207,13.26241,13.31274,13.36307,13.4134,13.46373,13.51406,13.5644,13.61473,13.66506,13.71539,13.76572,13.81605,13.86639,13.91672,13.96705,14.01738,14.06771,14.11805,14.16838,14.21871,14.26904,14.31937,14.3697,14.42004,14.47037,14.5207,14.57103,14.62136,14.67169,14.72203,14.77236,14.82269,14.87302,14.92335,14.97368,15.02402,15.07435,15.12468,15.17501,15.22534,15.27567,15.32601,15.37634,15.42667,15.477,15.52733,15.57766,15.628,15.67833,15.72866,15.77899,15.82932,15.87966,15.92999,15.98032,16.03065,16.08098,16.13131,16.18165,16.23198,16.28231,16.33264,16.38297,16.4333,16.48364,16.53397,16.5843,16.63463,16.68496,16.73529,16.78563,16.83596,16.88629,16.93662,16.98695,17.03728,17.08762,17.13795,17.18828,17.23861,17.28894,17.33927,17.38961,17.43994,17.49027,17.5406,17.59093,17.64127,17.6916,17.74193,17.79226,17.84259,17.89292,17.94326,17.99359,18.04392,18.09425,18.14458,18.19491,18.24525,18.29558,18.34591,18.39624,18.44657,18.4969,18.54724,18.59757,18.6479,18.69823,18.74856,18.79889,18.84923,18.89956,18.94989,19.00022,19.05055,19.10088,19.15122,19.20155,19.25188,19.30221,19.35254,19.40287,19.45321,19.50354,19.55387,19.6042,19.65453,19.70487,19.7552,19.80553,19.85586,19.90619,19.95652,20.00686,20.05719,20.10752,20.15785,20.20818,20.25851,20.30885,20.35918,20.40951,20.45984,20.51017,20.5605,20.61084,20.66117,20.7115,20.76183,20.81216,20.86249,20.91283,20.96316,21.01349,21.06382,21.11415,21.16448,21.21482,21.26515,21.31548,21.36581,21.41614,21.46648,21.51681,21.56714,21.61747,21.6678,21.71813,21.76847,21.8188,21.86913,21.91946,21.96979,22.02012,22.07046,22.12079,22.17112,22.22145,22.27178,22.32211,22.37245,22.42278,22.47311,22.52344,22.57377,22.6241,22.67444,22.72477,22.7751,22.82543,22.87576,22.92609,22.97643,23.02676,23.07709,23.12742,23.17775,23.22809,23.27842,23.32875,23.37908,23.42941,23.47974,23.53008,23.58041,23.63074,23.68107,23.7314,23.78173,23.83207,23.8824,23.93273,23.98306,24.03339,24.08372,24.13406,24.18439,24.23472,24.28505,24.33538,24.38571,24.43605,24.48638,24.51154]}</script>
+<script type="application/json" id="data-speedup">{"N":[32000,108000,256000,500000,864000],"job":14364484,"cpu1":[56.32,171.98,413.85,772.32,1358.82],"cpu1_force":[55.53,169.62,408.16,758.63,1330.52],"cpu10":[8.73,27.49,58.7,112.59,201.85],"cpu10_force":[8.12,26.29,56.46,108.39,191.37],"cpu20":[4.61,14.65,30.43,56.09,99.41],"cpu20_force":[4.11,13.62,29.18,53.84,95.5],"gpu1":[1.56,4.33,9.67,21.68,41.86],"gpu1_force":[0.73,1.95,4.16,7.88,13.66],"gpu2":[1.11,2.76,5.54,10.39,19.67],"gpu2_force":[0.53,1.21,2.3,4.24,7.13]}</script>
+<script type="application/json" id="data-insitu">{"cellorder_k100":{"off":18.61,"k100":19.58},"separate_node":{"off":25.13,"k100_same":26.05,"k100_sep":25.18},"p_ana":{"off":25.1,"p1":31.39,"p2":26.1},"p_ana_t_analysis":{"p1":3.08,"p2":1.56},"p_ana_stall_total":{"p1":13.64,"p2":0.0},"sortfix":{"off":18.82,"on":20.09}}</script>
+<script type="application/json" id="data-scaling">{"cpu_strong_256k_P1":416.86,"cpu_strong_256k_P2":224.84,"cpu_strong_256k_P4":126.34,"cpu_strong_256k_P8":75.37,"cpu_strong_256k_P16":38.01,"cpu_strong_256k_P20":30.29,"cpu_weak_32k_P1":56.63,"cpu_weak_32k_P2":59.46,"cpu_weak_32k_P4":64.73,"cpu_weak_32k_P8":75.2,"cpu_weak_32k_P16":76.1,"cpu_weak_32k_P20":75.88,"gpu_strong_1M_P1":51.73,"gpu_strong_1M_P2":30.5,"gpu_strong_1M_P4":23.58,"gpu_strong_256k_P1":9.69,"gpu_strong_256k_P2":6.08,"gpu_weak_262k_P1":9.96,"gpu_weak_262k_P2":13.61}</script>
+<script type="application/json" id="data-classifier">{"n_train":279936,"n_test":139968,"n_slab":49152,"mlp":{"train":0.9979888260173754,"test":0.9994141518061271,"slab":0.9536336263020834,"near":0.7371565113500598},"thr":{"train":0.9961634087791496,"test":0.9987925811614083,"slab":0.9569498697916666,"near":0.7502986857825568,"t":0.30787509020000003}}</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+document.documentElement.classList.add('js');
+var $ = function(s, r){ return (r || document).querySelector(s); };
+var $$ = function(s, r){ return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+function J(id){ try { return JSON.parse(document.getElementById(id).textContent); } catch(e){ return {}; } }
+var PROD = J('data-prod'), SPD = J('data-speedup');
+var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+var fmtInt = function(n){ return Math.round(n).toLocaleString('en-US'); };
+var NS = 'http://www.w3.org/2000/svg';
+
+/* ------------------------------------------------------------------ */
+/* whenVisible: IntersectionObserver plus a manual rect check on        */
+/* scroll/resize/load, so a scroll-triggered animation always runs once */
+/* ------------------------------------------------------------------ */
+var pendingVis = [];
+function checkVis(){
+  var h = window.innerHeight;
+  pendingVis = pendingVis.filter(function(p){
+    var r = p.el.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < h - Math.min(60, r.height*0.3)){ p.fire(); return false; }
+    return true;
+  });
+}
+function whenVisible(el, fn){
+  var done = false, io = null;
+  var p = {el:el, fire:function(){ if (done) return; done = true; if (io) io.disconnect(); fn(); }};
+  if ('IntersectionObserver' in window){
+    io = new IntersectionObserver(function(es){ if (es[0].isIntersecting) p.fire(); }, {threshold:0.1});
+    io.observe(el);
+  }
+  pendingVis.push(p);
+}
+var visTick = 0;
+window.addEventListener('scroll', function(){ if (!visTick) visTick = requestAnimationFrame(function(){ visTick = 0; checkVis(); }); }, {passive:true});
+window.addEventListener('resize', checkVis);
+window.addEventListener('load', function(){ setTimeout(checkVis, 300); });
+setTimeout(checkVis, 2500);
+
+/* ------------------------------------------------------------------ */
+/* reveal: hide only what is below the fold when JS runs               */
+/* ------------------------------------------------------------------ */
+function reveal(el){
+  if (REDUCED) return;
+  var r = el.getBoundingClientRect();
+  if (r.top > window.innerHeight){ el.classList.add('pre'); whenVisible(el, function(){ el.classList.remove('pre'); el.classList.add('draw'); }); }
+}
+
+/* ------------------------------------------------------------------ */
+/* count-up readouts (once). Final values are in the HTML; JS only animates. */
+/* ------------------------------------------------------------------ */
+(function(){
+  if (REDUCED) return;
+  function prep(el){
+    var node = el.firstChild; if (!node || node.nodeType !== 3) return null;
+    var mm = /^([\d,]+(?:\.\d+)?)(.*)$/.exec(node.nodeValue); if (!mm) return null;
+    var raw = mm[1], dec = (raw.split('.')[1] || '').length, comma = raw.indexOf(',') >= 0;
+    var val = parseFloat(raw.replace(/,/g, ''));
+    var f = function(v){ var s = v.toFixed(dec); if (comma) s = Number(s).toLocaleString('en-US', {minimumFractionDigits:dec, maximumFractionDigits:dec}); return s + mm[2]; };
+    return {node:node, val:val, f:f, final:node.nodeValue};
+  }
+  function run(c){
+    var t0 = performance.now(), DUR = 900;
+    setTimeout(function(){ c.node.nodeValue = c.final; }, DUR + 400);   /* never leave a partial value if rAF stalls */
+    (function tick(now){
+      var u = Math.max(0, Math.min(1, (now - t0)/DUR)), e = 1 - Math.pow(1-u, 3);
+      c.node.nodeValue = u < 1 ? c.f(c.val*e) : c.final;
+      if (u < 1) requestAnimationFrame(tick);
+    })(t0);
+  }
+  $$('[data-count]').forEach(function(el){
+    var c = prep(el); if (!c) return;
+    c.node.nodeValue = c.f(0);
+    if (el.getBoundingClientRect().top < window.innerHeight) setTimeout(function(){ run(c); }, 250);
+    else whenVisible(el, function(){ run(c); });
+  });
+})();
+
+/* ------------------------------------------------------------------ */
+/* nav highlight                                                        */
+/* ------------------------------------------------------------------ */
+(function(){
+  var links = $$('.nav li a'), now = $('#nav-now');
+  var map = {}; links.forEach(function(a){ map[a.getAttribute('href').slice(1)] = a; });
+  if (!('IntersectionObserver' in window)) return;
+  var io = new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if (!e.isIntersecting) return;
+      links.forEach(function(a){ a.classList.remove('active'); });
+      var a = map[e.target.id];
+      if (a){ a.classList.add('active'); var nn = a.querySelector('.nn'), nm = a.querySelector('.nm'); now.textContent = (nn ? nn.textContent + ' ' : '') + (nm ? nm.textContent : ''); } else { now.textContent = ''; }
+    });
+  }, {rootMargin:'-45% 0px -50% 0px'});
+  $$('section.block, header.hero').forEach(function(s){ io.observe(s); });
+})();
+
+/* ------------------------------------------------------------------ */
+/* series helpers                                                       */
+/* ------------------------------------------------------------------ */
+var T = PROD.t || [], NMAX = PROD.nmax_mlp || [];
+var T_END = T.length ? T[T.length-1] : 487;
+function idxAt(t){ var lo=0, hi=T.length-1; if (t<=T[0]) return 0; if (t>=T[hi]) return hi; while(hi-lo>1){ var m=(lo+hi)>>1; if (T[m]<=t) lo=m; else hi=m; } return lo; }
+function nAt(t){
+  if (!T.length) return 0;
+  var i = idxAt(t); if (i >= T.length-1) return NMAX[T.length-1];
+  var u = (t - T[i]) / (T[i+1] - T[i]); return NMAX[i] + u * (NMAX[i+1] - NMAX[i]);
+}
+
+/* ------------------------------------------------------------------ */
+/* HERO: lit-atom simulation driven by the measured n_max(t)           */
+/* ------------------------------------------------------------------ */
+(function(){
+  var hero = $('#top'), canvas = $('#sim');
+  var hT = $('#hud-t'), hN = $('#hud-n'), hF = $('#hud-f'), play = $('#hud-play'), scrub = $('#hud-scrub');
+  var ph = $('#hud-ph'), phT = $('#hud-pht'), fill = $('#hud-fill');
+  var N_REAL = PROD.N || 1048576, RHO = 0.95, L_REAL = Math.cbrt(N_REAL / RHO);   /* 103.4 sigma */
+  var PLAY_S = 24;
+  var scrubTarget = -1, simT = 0, playing = !REDUCED, holdLeft = -1, fade = 1, fadeDir = 0, visible = true, scrubbing = false;
+  var intro = REDUCED ? 99 : 0;
+  var gl = null;
+
+  /* title words: stagger in, only when JS runs and motion is allowed */
+  (function(){
+    var h1 = $('#hero-title'); if (!h1 || REDUCED) return;
+    var i = 0, out = [];
+    Array.prototype.slice.call(h1.childNodes).forEach(function(n){
+      if (n.nodeType === 3){ n.nodeValue.split(/(\s+)/).forEach(function(w){ if (!w) return; if (/^\s+$/.test(w)) out.push(document.createTextNode(w)); else { var sp = document.createElement('span'); sp.className = 'w'; sp.style.setProperty('--i', i++); sp.textContent = w; out.push(sp); } }); }
+      else { n.classList.add('w'); n.style.setProperty('--i', i++); out.push(n); }
+    });
+    h1.textContent = ''; out.forEach(function(n){ h1.appendChild(n); });
+    hero.classList.add('intro');
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ hero.classList.add('go'); }); });
+    setTimeout(function(){ hero.classList.add('go'); }, 600);
+  })();
+
+  /* timeline ticks at real times */
+  (function(){
+    var host = $('#hud-ticks'); if (!host) return;
+    var T0 = [[0,'0',''],[40,'40','seed released'],[100,'100',''],[200,'200',''],[300,'300',''],[400,'400',''],[487,'487','run stopped']];
+    host.innerHTML = T0.map(function(k){
+      var x = (100 * k[0] / T_END).toFixed(2) + '%', cls = k[0] === 0 ? 'start' : (k[0] >= T_END ? 'end' : '');
+      return '<i class="'+(k[2]?'ev':'')+'" style="left:'+x+'"></i><span class="'+cls+'" style="left:'+x+'">'+k[1]+(k[2]?'<b>'+k[2]+'</b>':'')+'</span>';
+    }).join('');
+  })();
+
+  var ICON_PAUSE = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="2" y="1.5" width="2.6" height="9"/><rect x="7.4" y="1.5" width="2.6" height="9"/></svg>';
+  var ICON_PLAY = '<svg viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.5 1.2v9.6L10.5 6z"/></svg>';
+  function setPlayIcon(){ play.innerHTML = playing ? ICON_PAUSE : ICON_PLAY; play.setAttribute('aria-label', playing ? 'Pause' : 'Play'); }
+
+  function hud(){
+    var n = nAt(simT), f = simT / T_END;
+    hT.textContent = simT.toFixed(1);
+    hN.textContent = fmtInt(n);
+    hF.textContent = (100 * n / N_REAL).toFixed(1) + '%';
+    var pc = (100 * f).toFixed(2) + '%';
+    ph.style.left = pc; fill.style.width = pc;
+    phT.textContent = 't ' + simT.toFixed(0);
+    phT.style.transform = f > 0.94 ? 'translate(-100%, -2px)' : (f < 0.04 ? 'translate(0, -2px)' : '');
+    if (!scrubbing) scrub.value = Math.round(1000 * f);
+  }
+
+  function initGL(){
+    if (typeof THREE === 'undefined') return null;
+    var renderer;
+    try { renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true, alpha:true, premultipliedAlpha:true, powerPreference:'high-performance'}); }
+    catch(e){ return null; }
+    if (!renderer.getContext()) return null;
+    var BG = new THREE.Color('#F6F6F3');          /* paper, used for depth fade */
+    renderer.setClearColor(0x000000, 0);
+
+    var small = window.innerWidth < 700;
+    var m = small ? 12 : 20, NV = 4*m*m*m;          /* 6,912 or 32,000 atoms */
+    var L = 10, a = L / m;
+    var site = new Float32Array(NV*3), off = new Float32Array(NV*3), pos = new Float32Array(NV*3);
+    var phase = new Float32Array(NV), deff = new Float32Array(NV), rnd = new Float32Array(NV);
+    var B = [[0,0,0],[.5,.5,0],[.5,0,.5],[0,.5,.5]], k = 0;
+    var A_LIQ = 0.30 * a;
+    for (var i=0;i<m;i++) for (var j=0;j<m;j++) for (var l=0;l<m;l++) for (var b=0;b<4;b++){
+      var x = (i+B[b][0])*a - L/2, y = (j+B[b][1])*a - L/2, z = (l+B[b][2])*a - L/2;
+      site[3*k]=x; site[3*k+1]=y; site[3*k+2]=z;
+      var d = Math.sqrt(x*x+y*y+z*z) + 1e-6, ux=x/d, uy=y/d, uz=z/d;
+      var lobe = Math.sin(2.7*ux+0.4)*Math.sin(2.9*uy+1.3)*Math.sin(3.1*uz+2.1) + 0.5*Math.sin(5.0*ux*uy+uz*2.0);
+      deff[k] = d / (1 + 0.075*lobe) + (Math.random()-0.5)*0.6*a;
+      rnd[k] = Math.random();
+      for (var c=0;c<3;c++){ off[3*k+c] = (Math.random()+Math.random()+Math.random()-1.5)*2*A_LIQ; pos[3*k+c] = site[3*k+c] + off[3*k+c]; }
+      k++;
+    }
+    var geo = new THREE.BufferGeometry();
+    var posAttr = new THREE.BufferAttribute(pos, 3); posAttr.setUsage(THREE.DynamicDrawUsage);
+    var phAttr = new THREE.BufferAttribute(phase, 1); phAttr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', posAttr); geo.setAttribute('phase', phAttr);
+    geo.setAttribute('aD', new THREE.BufferAttribute(deff, 1));
+    geo.setAttribute('aRnd', new THREE.BufferAttribute(rnd, 1));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), L);
+
+    var U = {
+      uR:{value:0}, uA:{value:a}, uScale:{value:600}, uNear:{value:20}, uFar:{value:40},
+      uFadeL:{value:REDUCED?1:0}, uFadeC:{value:REDUCED?1:0}, uFade:{value:1},
+      cDeep:{value:new THREE.Color('#B02A14')}, cIce:{value:new THREE.Color('#E0351B')}, cShell:{value:new THREE.Color('#F0624A')},
+      cLiq:{value:new THREE.Color('#2A2A28')}, cBg:{value:BG}
+    };
+    /* crystal: lit sphere impostors, opaque, depth-tested */
+    var matC = new THREE.ShaderMaterial({
+      uniforms:U,
+      vertexShader:[
+        'attribute float phase; attribute float aD; uniform float uScale; uniform float uA; uniform float uNear; uniform float uFar; uniform float uFadeC;',
+        'varying float vP; varying float vD; varying float vFog;',
+        'void main(){ vP = phase; vD = aD; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv;',
+        ' float fl = sin(3.14159*phase); fl = fl*fl*fl;',
+        ' float size = uA*0.74*(1.0+0.45*fl)*uFadeC;',
+        ' gl_PointSize = size*uScale/(-mv.z);',
+        ' if (phase < 0.5 || uFadeC < 0.02){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; }',
+        ' vFog = smoothstep(uNear, uFar, -mv.z); }'
+      ].join('\n'),
+      fragmentShader:[
+        'uniform float uR; uniform float uA; uniform float uFadeC; uniform float uFade;',
+        'uniform vec3 cDeep; uniform vec3 cIce; uniform vec3 cShell; uniform vec3 cBg;',
+        'varying float vP; varying float vD; varying float vFog;',
+        'void main(){ vec2 c = gl_PointCoord*2.0-1.0; c.y = -c.y; float r2 = dot(c,c); if (r2 > 1.0) discard;',
+        ' vec3 n = vec3(c, sqrt(1.0-r2));',
+        ' vec3 L1 = normalize(vec3(-0.35,0.78,0.52));',
+        ' float lam = max(dot(n,L1),0.0);',
+        ' float t = clamp(vD/max(uR,1e-3), 0.0, 1.0);',
+        ' vec3 base = mix(cDeep, cIce, smoothstep(0.1,0.9,t));',
+        ' float shell = 1.0 - smoothstep(0.2*uA, 1.5*uA, uR - vD);',
+        ' base = mix(base, cShell, shell*0.9);',
+        ' vec3 col = base*(0.52 + 0.55*lam);',
+        ' col *= 1.0 - 0.35*pow(1.0 - n.z, 1.5);',
+        ' col *= 1.0 - 0.45*smoothstep(0.78, 1.0, r2);',
+        ' col = mix(col, cBg, vFog*0.4);',
+        ' gl_FragColor = vec4(mix(cBg, col, uFade), 1.0); }'
+      ].join('\n'),
+      depthTest:true, depthWrite:true, transparent:false
+    });
+    /* liquid: quiet ember haze, cut away in front of the centre plane */
+    var matL = new THREE.ShaderMaterial({
+      uniforms:U,
+      vertexShader:[
+        'attribute float phase; attribute float aRnd; uniform float uScale; uniform float uA; uniform float uNear; uniform float uFar;',
+        'varying float vA;',
+        'void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv;',
+        ' float cz = (modelViewMatrix*vec4(0.0,0.0,0.0,1.0)).z;',
+        ' float cut = 1.0 - smoothstep(-uA, uA, mv.z - cz);',
+        ' float fog = 1.0 - 0.7*smoothstep(uNear, uFar, -mv.z);',
+        ' float live = 1.0 - smoothstep(0.3, 0.5, phase);',
+        ' vA = cut*fog*live;',
+        ' float size = uA*(0.30+0.18*aRnd);',
+        ' gl_PointSize = size*uScale/(-mv.z);',
+        ' if (vA < 0.01){ gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; } }'
+      ].join('\n'),
+      fragmentShader:[
+        'uniform vec3 cLiq; uniform float uFadeL; uniform float uFade; varying float vA;',
+        'void main(){ vec2 c = gl_PointCoord*2.0-1.0; c.y = -c.y; float r2 = dot(c,c); if (r2 > 1.0) discard;',
+        ' vec3 n = vec3(c, sqrt(1.0-r2)); float lam = max(dot(n, normalize(vec3(-0.35,0.78,0.52))), 0.0);',
+        ' vec3 col = cLiq*(0.8 + 0.6*lam);',
+        ' gl_FragColor = vec4(col, vA*uFadeL*uFade*0.22); }'
+      ].join('\n'),
+      depthTest:true, depthWrite:false, transparent:true, blending:THREE.NormalBlending
+    });
+    var scene = new THREE.Scene(), group = new THREE.Group();
+    var ptsC = new THREE.Points(geo, matC), ptsL = new THREE.Points(geo, matL);
+    ptsC.frustumCulled = false; ptsL.frustumCulled = false;
+    ptsC.renderOrder = 0; ptsL.renderOrder = 1;
+    group.add(ptsC); group.add(ptsL);
+
+    /* corner brackets only: 3 short ticks at each of the 8 corners */
+    var h = L/2, o = -a/4, tk = 0.06*L, br = [];
+    [-1,1].forEach(function(sx){ [-1,1].forEach(function(sy){ [-1,1].forEach(function(sz){
+      var cx = sx*h+o, cy = sy*h+o, cz = sz*h+o;
+      br.push(cx,cy,cz, cx-sx*tk,cy,cz,  cx,cy,cz, cx,cy-sy*tk,cz,  cx,cy,cz, cx,cy,cz-sz*tk);
+    }); }); });
+    var bg2 = new THREE.BufferGeometry(); bg2.setAttribute('position', new THREE.Float32BufferAttribute(br, 3));
+    var brackets = new THREE.LineSegments(bg2, new THREE.LineBasicMaterial({color:0x121212, transparent:true, opacity:1.0, depthWrite:false}));
+    group.add(brackets);
+
+    /* faint floor grid with radial fade */
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(4*L, 4*L), new THREE.ShaderMaterial({
+      uniforms:{uFade:U.uFade, uFadeL:U.uFadeL},
+      vertexShader:'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+      fragmentShader:[
+        'uniform float uFade; uniform float uFadeL; varying vec2 vP;',
+        'void main(){ vec2 g = abs(fract(vP*0.8 - 0.5) - 0.5)/fwidth(vP*0.8); float line = 1.0 - min(min(g.x,g.y), 1.0);',
+        ' float f = 1.0 - smoothstep(3.0, 17.0, length(vP));',
+        ' gl_FragColor = vec4(0.07, 0.07, 0.07, line*f*0.10*uFade*uFadeL); }'
+      ].join('\n'),
+      extensions:{derivatives:true}, transparent:true, depthWrite:false, blending:THREE.NormalBlending
+    }));
+    floor.rotation.x = -Math.PI/2; floor.position.y = -L/2 - 1.4;
+    group.add(floor);
+    scene.add(group);
+
+    var cam = new THREE.PerspectiveCamera(30, 1, 0.1, 300);
+
+    var bloom = null;   /* no post-processing in the print design */
+
+    /* orbit: drag to rotate (mouse/pen), damped, slow auto-rotate, pointer parallax, polar clamp 55..115 deg */
+    var D2R = Math.PI/180, az = 0.6, pol = 74*D2R, tAz = az, tPol = pol, dist = 40, baseDist = 40;
+    var dragging = false, lx = 0, ly = 0, parX = 0, parY = 0, tParX = 0, tParY = 0, wide = true, scrollK = 0;
+    canvas.addEventListener('pointerdown', function(e){ if (e.pointerType === 'touch') return; dragging = true; lx = e.clientX; ly = e.clientY; try{ canvas.setPointerCapture(e.pointerId); }catch(_){} });
+    canvas.addEventListener('pointermove', function(e){
+      if (!dragging) return;
+      tAz -= (e.clientX - lx)*0.006; tPol -= (e.clientY - ly)*0.006; lx = e.clientX; ly = e.clientY;
+      tPol = Math.max(55*D2R, Math.min(115*D2R, tPol));
+    });
+    var endDrag = function(){ dragging = false; };
+    canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+    window.addEventListener('pointermove', function(e){
+      if (e.pointerType === 'touch') return;
+      tParX = ((e.clientX / window.innerWidth) - 0.5) * 2 * 2.5 * D2R;
+      tParY = ((e.clientY / window.innerHeight) - 0.5) * 2 * 2.5 * D2R;
+    }, {passive:true});
+    window.addEventListener('scroll', function(){
+      var hh = hero.offsetHeight || 1; scrollK = Math.max(0, Math.min(1, window.scrollY / hh));
+      canvas.style.opacity = (1 - 0.9*scrollK).toFixed(3);
+    }, {passive:true});
+
+    var tmpV = new THREE.Vector2();
+    function resize(){
+      var w = canvas.clientWidth || window.innerWidth, hgt = canvas.clientHeight || window.innerHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(w, hgt, false);
+      cam.aspect = w / hgt;
+      wide = w > 760;
+      /* shift the projected centre right on wide screens so the box sits beside the text */
+      cam.clearViewOffset();
+      baseDist = wide ? 36 : 40;
+      cam.updateProjectionMatrix();
+      renderer.getDrawingBufferSize(tmpV);
+      U.uScale.value = tmpV.y / (2*Math.tan(cam.fov*Math.PI/360));
+      U.uNear.value = baseDist - 9; U.uFar.value = baseDist + 9;
+      if (bloom) bloom.size(tmpV.x, tmpV.y);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function radius(t){
+      var n = nAt(t);
+      /* R = cbrt(3 n / (4 pi rho)) in sigma, scaled by L / L_real: the crystal keeps the
+         same fraction of the box as in the real run (n_max / N, 41% at the end). */
+      return Math.cbrt(3*n/(4*Math.PI*RHO)) * (L / L_REAL);
+    }
+    function snapAll(t){ var R = radius(t); for (var i=0;i<NV;i++){ var p = deff[i] < R ? 1 : 0; phase[i] = p; var amp = 1 - 0.92*p, i3 = 3*i; pos[i3] = site[i3]+off[i3]*amp; pos[i3+1] = site[i3+1]+off[i3+1]*amp; pos[i3+2] = site[i3+2]+off[i3+2]*amp; } posAttr.needsUpdate = true; phAttr.needsUpdate = true; }
+    snapAll(simT);
+
+    var theta = 0.7, sig = A_LIQ*Math.sqrt(2*theta), parity = 0;
+    function step(dt, jitter, rate){
+      var R = radius(simT); U.uR.value = R;
+      parity ^= 1;
+      var dj = dt*2, sq = Math.sqrt(dj)*sig*2.449, damp = 1 - theta*dj;
+      for (var i=0;i<NV;i++){
+        var p = phase[i], tg = deff[i] < R ? 1 : 0;
+        if (p !== tg){ p += (tg > p ? 1 : -1) * dt * rate; p = p < 0 ? 0 : (p > 1 ? 1 : p); phase[i] = p; }
+        var i3 = 3*i;
+        if (p === 1 && tg === 1){ continue; }          /* settled crystal: nothing to move */
+        if (jitter && (i & 1) === parity){
+          off[i3]   = off[i3]*damp   + (Math.random()+Math.random()-1)*sq;
+          off[i3+1] = off[i3+1]*damp + (Math.random()+Math.random()-1)*sq;
+          off[i3+2] = off[i3+2]*damp + (Math.random()+Math.random()-1)*sq;
+        }
+        var e = p*p*(3-2*p), amp = 1 - 0.92*e;
+        pos[i3]   = site[i3]   + off[i3]*amp;
+        pos[i3+1] = site[i3+1] + off[i3+1]*amp;
+        pos[i3+2] = site[i3+2] + off[i3+2]*amp;
+      }
+      posAttr.needsUpdate = true; phAttr.needsUpdate = true;
+    }
+    function placeCam(dt, animate){
+      if (animate && !dragging) tAz += dt * (2*Math.PI/60) * 0.35;
+      var kk = 1 - Math.exp(-dt*3.0);                 /* damping */
+      az += (tAz - az)*kk; pol += (tPol - pol)*kk;
+      if (!dragging){ parX += (tParX - parX)*kk; parY += (tParY - parY)*kk; }
+      dist = baseDist*(1 + 0.14*scrollK);
+      var A = az + (REDUCED ? 0 : parX), P = Math.max(55*D2R, Math.min(115*D2R, pol + (REDUCED ? 0 : parY)));
+      cam.position.set(dist*Math.sin(P)*Math.sin(A), dist*Math.cos(P), dist*Math.sin(P)*Math.cos(A));
+      cam.lookAt(0, -0.4, 0);
+    }
+    return {
+      frame:function(dt, animate){
+        step(dt, animate, scrubbing ? 5 : 2.0);
+        placeCam(dt, animate);
+        U.uFade.value = fade;
+        U.uFadeL.value = REDUCED ? 1 : Math.min(1, intro/1.2);
+        U.uFadeC.value = REDUCED ? 1 : Math.max(0, Math.min(1, (intro-0.7)/0.6));
+        if (bloom) bloom.render(); else renderer.render(scene, cam);
+      },
+      snapAll:snapAll,
+      reset:function(){ snapAll(0); }
+    };
+  }
+
+  try { gl = initGL(); } catch(e){ gl = null; }
+  if (!gl) hero.classList.add('nogl');
+  if (REDUCED){ simT = T_END; if (gl) gl.snapAll(simT); }
+  setPlayIcon(); hud();
+
+  play.addEventListener('click', function(){
+    playing = !playing;
+    if (playing && simT >= T_END){ simT = 0; if (gl) gl.reset(); }
+    holdLeft = -1; fadeDir = 0; fade = 1;
+    setPlayIcon(); kick();
+  });
+  scrub.addEventListener('input', function(){
+    scrubbing = true; playing = false; holdLeft = -1; fadeDir = 0; fade = 1;
+    scrubTarget = T_END * (+scrub.value) / 1000;
+    if (REDUCED){ simT = scrubTarget; scrubTarget = -1; }
+    setPlayIcon(); hud(); kick();
+  });
+  scrub.addEventListener('change', function(){ scrubbing = false; });
+
+  if ('IntersectionObserver' in window){
+    new IntersectionObserver(function(es){ visible = es[0].isIntersecting; if (visible) kick(); }).observe(hero);
+  }
+  document.addEventListener('visibilitychange', function(){ if (!document.hidden) kick(); });
+
+  var last = 0, raf = 0, frames = 0, settle = 0;
+  function kick(){ if (!raf){ last = 0; settle = 1.2; raf = requestAnimationFrame(loop); } }
+  function loop(now){
+    raf = 0;
+    var dt = last ? Math.min(0.05, (now - last)/1000) : 0.016; last = now;
+    intro += dt;
+    var started = intro > 1.4;
+    if (scrubTarget >= 0){
+      simT += (scrubTarget - simT) * (1 - Math.exp(-dt*9));
+      if (Math.abs(scrubTarget - simT) < 0.05){ simT = scrubTarget; scrubTarget = -1; }
+    } else if (playing && started){
+      simT += dt * T_END / PLAY_S;
+      if (simT >= T_END){ simT = T_END; playing = false; holdLeft = 2.0; setPlayIcon(); }
+    } else if (holdLeft >= 0){
+      holdLeft -= dt;
+      if (holdLeft < 0){ fadeDir = -1; }
+    }
+    if (fadeDir !== 0){
+      fade += fadeDir * dt / 0.8;
+      if (fade <= 0){ fade = 0; fadeDir = 1; simT = 0; if (gl) gl.reset(); playing = true; setPlayIcon(); }
+      if (fade >= 1){ fade = 1; fadeDir = 0; }
+    }
+    var animate = !REDUCED;
+    if (gl) gl.frame(dt, animate && visible);
+    if ((frames++ & 1) === 0 || !playing) hud();
+    settle -= dt;
+    var busy = !REDUCED || playing || scrubTarget >= 0 || holdLeft >= 0 || fadeDir !== 0 || settle > 0;
+    if (busy && visible && !document.hidden) raf = requestAnimationFrame(loop);
+  }
+  kick();
+})();
+
+/* ------------------------------------------------------------------ */
+/* disk bars + reveal targets                                           */
+/* ------------------------------------------------------------------ */
+$$('[data-reveal]').forEach(reveal);
+
+/* ------------------------------------------------------------------ */
+/* ARCHITECTURE DIAGRAM                                                 */
+/* ------------------------------------------------------------------ */
+(function(){
+  var host = $('#arch'); if (!host) return;
+  var L = {
+    wide:{ vb:[1000,470],
+      sim:[{x:20,y:24,w:290,h:170},{x:20,y:276,w:290,h:170}],
+      cpu:function(b){ return {x:b.x+14,y:b.y+50,w:96,h:98}; },
+      gpu:function(b){ return {x:b.x+180,y:b.y+50,w:96,h:98}; },
+      pos:function(b){ return 'M'+(b.x+114)+','+(b.y+84)+' L'+(b.x+174)+','+(b.y+84); },
+      frc:function(b){ return 'M'+(b.x+174)+','+(b.y+116)+' L'+(b.x+114)+','+(b.y+116); },
+      posLab:function(b){ return [b.x+144,b.y+76,'middle']; },
+      frcLab:function(b){ return [b.x+144,b.y+134,'middle']; },
+      swap:'M165,198 L165,272', swapLab:[178,[228,242],'start'], swapLines:['swap border atoms','every step, r_c = 2.5'],
+      ana:{x:450,y:24,w:280,h:422},
+      recv:{x:466,y:60,w:248,h:36},
+      steps:[{x:466,y:116,w:248,h:72},{x:466,y:208,w:248,h:96},{x:466,y:324,w:248,h:72}],
+      pk:['M310,72 L466,72','M310,330 C394,330 382,88 466,88'],
+      pkLab:[380,[392,407,422],'middle'],
+      out:'M730,360 L820,360', outLab:[775,[348],'middle'], outLines:['labels, n_max'],
+      disk:{x:820,y:298,w:160,h:136},
+      counter:{x:900,y:66,anchor:'middle',stack:true}
+    },
+    tall:{ vb:[400,1000],
+      sim:[{x:8,y:8,w:186,h:176},{x:206,y:8,w:186,h:176}],
+      cpu:function(b){ return {x:b.x+12,y:b.y+36,w:162,h:44}; },
+      gpu:function(b){ return {x:b.x+12,y:b.y+120,w:162,h:44}; },
+      pos:function(b){ return 'M'+(b.x+52)+','+(b.y+84)+' L'+(b.x+52)+','+(b.y+116); },
+      frc:function(b){ return 'M'+(b.x+128)+','+(b.y+116)+' L'+(b.x+128)+','+(b.y+84); },
+      posLab:function(b){ return [b.x+58,b.y+104,'start']; },
+      frcLab:function(b){ return [b.x+134,b.y+104,'start']; },
+      swap:'M150,192 Q200,214 250,192', swapLab:[200,[234],'middle'], swapLines:['swap border atoms every step'],
+      ana:{x:8,y:346,w:384,h:424},
+      recv:{x:24,y:384,w:352,h:36},
+      steps:[{x:24,y:440,w:352,h:72},{x:24,y:530,w:352,h:104},{x:24,y:652,w:352,h:72}],
+      pk:['M50,186 C50,300 150,296 150,384','M350,186 C350,300 250,296 250,384'],
+      pkLab:[200,[272,287,302],'middle'],
+      out:'M200,770 L200,830', outLab:[212,[804],'start'], outLines:['labels, n_max'],
+      disk:{x:110,y:832,w:180,h:120},
+      counter:{x:200,y:984,anchor:'middle',stack:false}
+    }
+  };
+  var mode = null, els = null, running = false, raf = 0;
+
+  function txt(x, y, s, cls, anchor){ return '<text x="'+x+'" y="'+y+'"'+(cls?' class="'+cls+'"':'')+(anchor?' text-anchor="'+anchor+'"':'')+'>'+s+'</text>'; }
+  function rect(r, cls, rx){ return '<rect class="'+cls+'" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'" rx="'+(rx||2)+'"/>'; }
+
+  function build(){
+    var w = host.clientWidth; var m = w < 720 ? 'tall' : 'wide';
+    if (m === mode) return; mode = m;
+    var G = L[m], s = '';
+    s += '<svg viewBox="0 0 '+G.vb[0]+' '+G.vb[1]+'" xmlns="'+NS+'" aria-hidden="true">';
+    s += '<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="#121212"/></marker>'+
+         '<marker id="ahi" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#121212"/></marker>'+
+         '<marker id="ahs" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#121212"/></marker>'+
+         '</defs>';
+    /* SIM ranks */
+    G.sim.forEach(function(b, i){
+      var c = G.cpu(b), g = G.gpu(b);
+      s += rect(b, 'box');
+      s += txt(b.x+14, b.y+22, 'SIM rank '+i, 't-title');
+      s += txt(b.x+b.w-14, b.y+22, 'MD', 't-sub', 'end');
+      s += rect(c, 'unit') + rect(g, 'unit gpu');
+      var tallMode = (m === 'tall');
+      s += txt(c.x+12, c.y+(tallMode?19:24), 'CPU', 't-unit');
+      s += txt(c.x+12, c.y+(tallMode?34:42), tallMode ? 'integrate, halo, migrate' : 'integrate', 't-sub');
+      if (!tallMode){ s += txt(c.x+12, c.y+56, 'halo exchange', 't-sub') + txt(c.x+12, c.y+70, 'migration', 't-sub'); }
+      s += txt(g.x+12, g.y+(tallMode?19:24), 'GPU', 't-unit');
+      s += txt(g.x+12, g.y+(tallMode?34:42), tallMode ? 'LJ forces, CUDA' : 'LJ forces', 't-sub');
+      if (!tallMode){ s += txt(g.x+12, g.y+56, 'CUDA', 't-sub') + txt(g.x+12, g.y+70, 'cell sort', 't-sub'); }
+      s += '<path class="wire" d="'+G.pos(b)+'" marker-end="url(#ah)"/>';
+      s += '<path class="wire" d="'+G.frc(b)+'" marker-end="url(#ah)"/>';
+      var pl = G.posLab(b), fl = G.frcLab(b);
+      s += txt(pl[0], pl[1], 'positions', 't-lab', pl[2]) + txt(fl[0], fl[1], 'forces', 't-lab', fl[2]);
+      s += '<path id="ar-pos'+i+'" d="'+G.pos(b)+'" fill="none" stroke="none"/><path id="ar-frc'+i+'" d="'+G.frc(b)+'" fill="none" stroke="none"/>';
+      s += '<circle id="ar-pd'+i+'" r="2.6" fill="#121212" opacity="0"/><circle id="ar-fd'+i+'" r="2.6" fill="#121212" opacity="0"/>';
+    });
+    /* swap */
+    s += '<path class="wire" id="ar-swap" d="'+G.swap+'" marker-start="url(#ah)" marker-end="url(#ah)"/>';
+    G.swapLines.forEach(function(t, k){ s += txt(G.swapLab[0], G.swapLab[1][k], t, 't-lab', G.swapLab[2]); });
+    s += '<circle id="ar-sw0" r="2.4" fill="#5C5C58" opacity="0"/><circle id="ar-sw1" r="2.4" fill="#5C5C58" opacity="0"/>';
+    /* ANA */
+    var A = G.ana;
+    s += rect(A, 'box');
+    s += txt(A.x+16, A.y+24, 'ANA ranks', 't-title') + txt(A.x+A.w-16, A.y+24, 'CPU + OpenMP', 't-sub', 'end');
+    s += rect(G.recv, 'node', 2).replace('class="node"', 'class="node" id="ar-recv"');
+    s += txt(G.recv.x+12, G.recv.y+22, 'MPI_Probe + MPI_Recv', 't-lab');
+    s += txt(G.recv.x+G.recv.w-12, G.recv.y+22, 'K = 100', 't-sub', 'end');
+    var names = [['Measure order','q4, q6, q̄4, q̄6, coordination'],['Neural network','MLP 5-16-16-2, 402 parameters'],['Find biggest crystal','gather, union-find, n_max']];
+    G.steps.forEach(function(r, i){
+      s += rect(r, 'node').replace('class="node"', 'class="node" id="ar-s'+i+'"');
+      s += txt(r.x+14, r.y+30, String(i+1), 't-num');
+      s += txt(r.x+42, r.y+26, names[i][0], 't-title');
+      s += txt(r.x+42, r.y+44, names[i][1], 't-sub');
+      if (i === 1){
+        s += '<circle cx="'+(r.x+48)+'" cy="'+(r.y+71)+'" r="5" fill="#2A2A28"/>' + txt(r.x+59, r.y+75, 'liquid', 't-lab');
+        s += '<circle cx="'+(r.x+122)+'" cy="'+(r.y+71)+'" r="5" fill="#E0351B"/>' + txt(r.x+133, r.y+75, 'crystal', 't-lab');
+      }
+      var prev = i === 0 ? G.recv : G.steps[i-1];
+      var cx = r.x + r.w/2;
+      s += '<path class="wire" d="M'+cx+','+(prev.y+prev.h+2)+' L'+cx+','+(r.y-3)+'" marker-end="url(#ah)"/>';
+    });
+    /* packets in */
+    G.pk.forEach(function(d, i){ s += '<path class="wire ice" id="ar-pk'+i+'" d="'+d+'" marker-end="url(#ahi)"/>'; });
+    var pkl = ['every 100 steps:','atoms + 3.0 σ halo,','MPI_Isend, no wait'];
+    pkl.forEach(function(t, k){ s += txt(G.pkLab[0], G.pkLab[1][k], t, k===0?'t-ice':'t-lab', G.pkLab[2]); });
+    /* out to disk */
+    s += '<path class="wire sig" id="ar-out" d="'+G.out+'" marker-end="url(#ahs)"/>';
+    G.outLines.forEach(function(t, k){ s += txt(G.outLab[0], G.outLab[1][k], t, 't-lab', G.outLab[2]); });
+    var D = G.disk, ry = 12, cxD = D.x + D.w/2;
+    s += '<path class="disk" id="ar-disk" d="M'+D.x+','+(D.y+ry)+' L'+D.x+','+(D.y+D.h-ry)+' A'+(D.w/2)+','+ry+' 0 0 0 '+(D.x+D.w)+','+(D.y+D.h-ry)+' L'+(D.x+D.w)+','+(D.y+ry)+' A'+(D.w/2)+','+ry+' 0 0 0 '+D.x+','+(D.y+ry)+' Z"/>';
+    s += '<ellipse cx="'+cxD+'" cy="'+(D.y+ry)+'" rx="'+(D.w/2)+'" ry="'+ry+'" fill="none" stroke="#121212"/>';
+    s += txt(cxD, D.y+46, 'DISK', 't-lab', 'middle');
+    s += txt(cxD, D.y+82, '1.85 GB', 't-big', 'middle');
+    s += txt(cxD, D.y+104, 'not 24.5 GB', 't-sub', 'middle');
+    /* step counter */
+    var C = G.counter;
+    if (C.stack){
+      s += txt(C.x, C.y, 'MD STEP', 't-sub', 'middle');
+      s += txt(C.x, C.y+30, '0', 't-step', 'middle').replace('<text', '<text id="ar-step"');
+      s += txt(C.x, C.y+52, 'K = 100', 't-sub', 'middle');
+      s += '<rect x="'+(C.x-60)+'" y="'+(C.y+66)+'" width="120" height="3" fill="rgba(18,18,18,.18)"/><rect id="ar-bar" x="'+(C.x-60)+'" y="'+(C.y+66)+'" width="0" height="3" fill="#E0351B"/>';
+    } else {
+      s += txt(C.x, C.y, 'MD step 0', 't-lab', 'middle').replace('<text', '<text id="ar-step"');
+    }
+    /* moving dots on top */
+    s += '<circle id="ar-p0" r="5" fill="#E0351B" opacity="0"/><circle id="ar-p1" r="5" fill="#E0351B" opacity="0"/>';
+    s += '<circle id="ar-o" r="3.6" fill="#E0351B" opacity="0"/>';
+    s += '</svg>';
+    host.innerHTML = s;
+    var g = function(id){ return document.getElementById(id); };
+    els = { stack:C.stack,
+      pk:[g('ar-pk0'), g('ar-pk1')], p:[g('ar-p0'), g('ar-p1')], out:g('ar-out'), o:g('ar-o'),
+      recv:g('ar-recv'), s:[g('ar-s0'), g('ar-s1'), g('ar-s2')], disk:g('ar-disk'), step:g('ar-step'), bar:g('ar-bar'),
+      pos:[g('ar-pos0'), g('ar-pos1')], frc:[g('ar-frc0'), g('ar-frc1')], pd:[g('ar-pd0'), g('ar-pd1')], fd:[g('ar-fd0'), g('ar-fd1')],
+      swap:g('ar-swap'), sw:[g('ar-sw0'), g('ar-sw1')] };
+    els.len = function(p){ return p.getTotalLength ? p.getTotalLength() : 0; };
+    draw(REDUCED ? 0.62 : 0, 0);
+  }
+
+  function at(path, u, dot){
+    var Lp = path.getTotalLength(), pt = path.getPointAtLength(Math.max(0, Math.min(1, u))*Lp);
+    dot.setAttribute('cx', pt.x.toFixed(1)); dot.setAttribute('cy', pt.y.toFixed(1));
+  }
+  function ease(u){ return u<.5 ? 2*u*u : 1-Math.pow(-2*u+2,2)/2; }
+  function on(el, v){ if (el) el.classList.toggle('on', v); }
+
+  function draw(c, tsec){
+    if (!els) return;
+    var cyc = Math.floor(tsec / 4.0);
+    var st = cyc*100 + Math.floor(c*100);
+    if (els.step) els.step.textContent = els.stack ? fmtInt(st) : 'MD step ' + fmtInt(st) + ' · analysis every 100';
+    if (els.bar) els.bar.setAttribute('width', (120*c).toFixed(1));
+    /* packets SIM -> ANA */
+    for (var i=0;i<2;i++){
+      if (c < 0.3 && !REDUCED){ els.p[i].setAttribute('opacity', 1); at(els.pk[i], ease(c/0.3), els.p[i]); }
+      else els.p[i].setAttribute('opacity', 0);
+    }
+    on(els.recv, c >= 0.27 && c < 0.42);
+    on(els.s[0], c >= 0.42 && c < 0.56);
+    on(els.s[1], c >= 0.56 && c < 0.70);
+    on(els.s[2], c >= 0.70 && c < 0.84);
+    if (c >= 0.84 && c < 0.97 && !REDUCED){ els.o.setAttribute('opacity', 1); at(els.out, ease((c-0.84)/0.13), els.o); }
+    else els.o.setAttribute('opacity', 0);
+    on(els.disk, c >= 0.95 || c < 0.04);
+    if (REDUCED) return;
+    /* positions / forces shuttles: continuous */
+    var u = (tsec*1.5) % 1;
+    for (var k=0;k<2;k++){
+      var uu = (u + k*0.5) % 1;
+      if (uu < 0.5){ els.pd[k].setAttribute('opacity', 1); els.fd[k].setAttribute('opacity', 0); at(els.pos[k], ease(uu*2), els.pd[k]); }
+      else { els.pd[k].setAttribute('opacity', 0); els.fd[k].setAttribute('opacity', 1); at(els.frc[k], ease((uu-0.5)*2), els.fd[k]); }
+    }
+    var v = (tsec*1.1) % 1;
+    els.sw[0].setAttribute('opacity', 1); els.sw[1].setAttribute('opacity', 1);
+    at(els.swap, ease(v), els.sw[0]); at(els.swap, 1-ease(v), els.sw[1]);
+  }
+  function loop(now){
+    raf = 0; if (!running) return;
+    var t = now/1000; draw((t % 4.0)/4.0, t);
+    raf = requestAnimationFrame(loop);
+  }
+  build();
+  if (window.ResizeObserver) new ResizeObserver(build).observe(host); else window.addEventListener('resize', build);
+  if (!REDUCED && 'IntersectionObserver' in window){
+    new IntersectionObserver(function(es){
+      running = es[0].isIntersecting;
+      if (running && !raf) raf = requestAnimationFrame(loop);
+    }).observe(host);
+  }
+})();
+
+/* ------------------------------------------------------------------ */
+/* TEMPERATURE STRIP                                                    */
+/* ------------------------------------------------------------------ */
+(function(){
+  var host = $('#tstrip'); if (!host) return;
+  var lastW = 0;
+  function render(){
+    var W = host.clientWidth; if (!W || W === lastW) return; lastW = W;
+    var narrow = W < 640;
+    var H = narrow ? 250 : 240, ml = 40, mr = 14, mt = 40, mb = narrow ? 64 : 52;
+    var BRK = 45, frac = narrow ? 0.36 : 0.3;
+    var x0 = ml, x1 = W - mr, xb = x0 + frac*(x1-x0);
+    function X(t){ return t <= BRK ? x0 + (t/BRK)*(xb-x0) : xb + (t-BRK)/(560-BRK)*(x1-xb); }
+    function Y(T){ return mt + (1 - T/2.2)*(H-mt-mb); }
+    var s = '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="'+NS+'">';
+    s += '<defs><linearGradient id="tg" gradientUnits="userSpaceOnUse" x1="'+X(25)+'" x2="'+X(35)+'" y1="0" y2="0"><stop offset="0" stop-color="#121212"/><stop offset="1" stop-color="#121212"/></linearGradient></defs>';
+    /* bands */
+    s += '<rect x="'+X(0)+'" y="'+mt+'" width="'+(X(25)-X(0))+'" height="'+(H-mt-mb)+'" fill="rgba(18,18,18,.06)"/>';
+    s += '<rect x="'+X(25)+'" y="'+mt+'" width="'+(X(35)-X(25))+'" height="'+(H-mt-mb)+'" fill="rgba(18,18,18,.03)"/>';
+    s += '<rect x="'+X(35)+'" y="'+mt+'" width="'+(X(487)-X(35))+'" height="'+(H-mt-mb)+'" fill="rgba(18,18,18,0)"/>';
+    s += '<text class="band-l" x="'+((X(0)+X(25))/2)+'" y="'+(mt-14)+'" text-anchor="middle">MELT</text>';
+    s += '<text class="band-l" x="'+((X(25)+X(35))/2+(narrow?6:0))+'" y="'+(mt-14)+'" text-anchor="middle">QUENCH</text>';
+    s += '<text class="band-l" x="'+((X(35)+X(487))/2)+'" y="'+(mt-14)+'" text-anchor="middle">HOLD WITH SEED</text>';
+    /* y ticks */
+    [[2.0,'2.0'],[0.7,'0.70']].forEach(function(p){
+      s += '<line x1="'+x0+'" x2="'+x1+'" y1="'+Y(p[0])+'" y2="'+Y(p[0])+'" stroke="rgba(18,18,18,.08)"/>';
+      s += '<text x="'+(x0-6)+'" y="'+Y(p[0])+'" dy="0.32em" text-anchor="end">'+p[1]+'</text>';
+    });
+    s += '<text x="'+(x0-6)+'" y="'+(mt-14)+'" text-anchor="end" style="fill:var(--ink2)">T*</text>';
+    /* axis */
+    var yb = H - mb;
+    s += '<line x1="'+x0+'" x2="'+x1+'" y1="'+yb+'" y2="'+yb+'" stroke="#121212"/>';
+    var ticks = narrow ? [0,25,35,100,200,300,400,500] : [0,25,35,100,200,300,400,500];
+    ticks.forEach(function(t){ s += '<line x1="'+X(t)+'" x2="'+X(t)+'" y1="'+yb+'" y2="'+(yb+5)+'" stroke="#121212"/><text x="'+X(t)+'" y="'+(yb+18)+'" text-anchor="middle">'+t+'</text>'; });
+    /* axis break */
+    s += '<path d="M'+(xb-4)+','+(yb+6)+' l4,-12 M'+(xb+1)+','+(yb+6)+' l4,-12" stroke="#5C5C58" fill="none"/>';
+    s += '<text x="'+((x0+x1)/2)+'" y="'+(H-(narrow?26:10))+'" text-anchor="middle" style="fill:var(--ink2)">time t (LJ units), axis stretched below t = 45</text>';
+    /* events */
+    s += '<line x1="'+X(40)+'" x2="'+X(40)+'" y1="'+mt+'" y2="'+yb+'" stroke="#E0351B" stroke-dasharray="2 3"/>';
+    s += '<circle cx="'+X(40)+'" cy="'+Y(0.7)+'" r="4.5" fill="#E0351B"/>';
+    s += '<text x="'+(X(40)+8)+'" y="'+(Y(0.7)+(narrow?26:22))+'" style="fill:var(--acc)">seed released, t = 40</text>';
+    s += '<line x1="'+X(487)+'" x2="'+X(487)+'" y1="'+mt+'" y2="'+yb+'" stroke="#121212" stroke-dasharray="4 3"/>';
+    s += '<text x="'+(X(487)-6)+'" y="'+(Y(2.0)+4)+'" text-anchor="end" style="fill:var(--ink2)">stopped at t = 487</text>';
+    s += '<text x="'+(X(487)-6)+'" y="'+(Y(2.0)+18)+'" text-anchor="end">step 97,400 of 112,000</text>';
+    if (!narrow) s += '<text x="'+(X(487)-6)+'" y="'+(Y(2.0)+32)+'" text-anchor="end">1-hour queue limit</text>';
+    /* curve */
+    var d = 'M'+X(0)+','+Y(2.0)+' L'+X(25)+','+Y(2.0)+' L'+X(35)+','+Y(0.7)+' L'+X(487)+','+Y(0.7);
+    s += '<path d="M'+X(487)+','+Y(0.7)+' L'+X(560)+','+Y(0.7)+'" stroke="#121212" stroke-width="1" stroke-dasharray="3 4" opacity=".4" fill="none"/>';
+    if (!narrow) s += '<text x="'+X(560)+'" y="'+(Y(0.7)-10)+'" text-anchor="end">planned</text>';
+    s += '<path class="curve" d="'+d+'" stroke="url(#tg)" pathLength="1"/>';
+    s += '<text x="'+(X(12.5))+'" y="'+(Y(2.0)-10)+'" text-anchor="middle" style="fill:var(--ink)">2.0</text>';
+    s += '</svg>';
+    host.innerHTML = s;
+  }
+  render();
+  if (window.ResizeObserver) new ResizeObserver(render).observe(host); else window.addEventListener('resize', render);
+})();
+
+/* ------------------------------------------------------------------ */
+/* generic hand-drawn line chart                                        */
+/* ------------------------------------------------------------------ */
+var chartUid = 0;
+function easeIO(u){ return u < .5 ? 4*u*u*u : 1 - Math.pow(-2*u+2, 3)/2; }
+function lineChart(el, cfg){
+  var W = 0, H, m, sx, isx, sy, tip, cur, dots, hit, uid = 'cp' + (++chartUid), clipR = null;
+  var drawState = 'done';
+  if (!REDUCED && el.getBoundingClientRect().top > window.innerHeight * 0.9){
+    drawState = 'pending';
+    whenVisible(el, function(){
+      drawState = 'running';
+      var t0 = performance.now(), DUR = 900;
+      setTimeout(function(){ if (clipR) clipR.setAttribute('width', W); drawState = 'done'; }, DUR + 400);
+      (function tick(now){
+        var u = Math.max(0, Math.min(1, (now - t0)/DUR));
+        if (clipR) clipR.setAttribute('width', (W * easeIO(u)).toFixed(1));
+        if (u < 1) requestAnimationFrame(tick); else drawState = 'done';
+      })(t0);
+    });
+  }
+  function mk(ax, a, b){
+    if (ax.log){ var l0 = Math.log10(ax.min), l1 = Math.log10(ax.max);
+      return [function(v){ return a + (Math.log10(v)-l0)/(l1-l0)*(b-a); }, function(p){ return Math.pow(10, l0 + (p-a)/(b-a)*(l1-l0)); }]; }
+    return [function(v){ return a + (v-ax.min)/(ax.max-ax.min)*(b-a); }, function(p){ return ax.min + (p-a)/(b-a)*(ax.max-ax.min); }];
+  }
+  function render(){
+    var w = el.clientWidth; if (!w || w === W) return; W = w;
+    H = cfg.height(W); m = cfg.margin(W);
+    var fx = mk(cfg.x, m.l, W-m.r), fy = mk(cfg.y, H-m.b, m.t); sx = fx[0]; isx = fx[1]; sy = fy[0];
+    var s = '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" xmlns="'+NS+'" role="img" aria-label="'+cfg.aria+'">';
+    cfg.y.ticks.forEach(function(v){ var y = sy(v).toFixed(1);
+      s += '<line class="grid" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(m.l-8)+'" y="'+y+'" dy="0.32em" text-anchor="end">'+cfg.y.fmt(v)+'</text>'; });
+    (cfg.x.ticks).forEach(function(v){ var x = sx(v).toFixed(1);
+      s += '<line class="xt" x1="'+x+'" x2="'+x+'" y1="'+(H-m.b)+'" y2="'+(H-m.b+5)+'"/><text x="'+x+'" y="'+(H-m.b+18)+'" text-anchor="middle">'+cfg.x.fmt(v)+'</text>'; });
+    s += '<line class="axis" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+(H-m.b)+'" y2="'+(H-m.b)+'"/>';
+    s += '<text class="alabel" x="'+((m.l+W-m.r)/2)+'" y="'+(H-6)+'" text-anchor="middle">'+cfg.x.label+'</text>';
+    s += '<text class="alabel" x="'+(m.l-8)+'" y="'+(m.t-14)+'" text-anchor="start">'+cfg.y.label+'</text>';
+    if (cfg.annotate) s += cfg.annotate(sx, sy, W, H, m);
+    s += '<defs><clipPath id="'+uid+'"><rect x="0" y="0" width="'+(drawState === 'done' ? W : 0)+'" height="'+H+'"/></clipPath></defs><g clip-path="url(#'+uid+')">';
+    cfg.series.forEach(function(se){
+      var d = '';
+      for (var i=0;i<se.xs.length;i++){ var y = se.ys[i]; if (cfg.y.log && !(y > 0)) continue;
+        d += (d ? 'L' : 'M') + sx(se.xs[i]).toFixed(1) + ',' + sy(y).toFixed(1); }
+      s += '<path d="'+d+'" fill="none" stroke="'+se.color+'" stroke-width="'+(se.w||2)+'" stroke-linejoin="round" stroke-linecap="round"'+(se.dash?' stroke-dasharray="'+se.dash+'"':'')+(se.glow?' style="filter:drop-shadow(0 0 6px '+se.color+')"':'')+'/>';
+      if (se.markers) se.xs.forEach(function(x, i){ s += '<circle cx="'+sx(x).toFixed(1)+'" cy="'+sy(se.ys[i]).toFixed(1)+'" r="3" fill="#F6F6F3" stroke="'+se.color+'" stroke-width="1.6"/>'; });
+      if (se.end){ var n = se.xs.length-1, ex = sx(se.xs[n]) + 8, ey = sy(se.ys[n]) + (se.endDy||0);
+        s += '<text class="endl" x="'+ex.toFixed(1)+'" y="'+ey.toFixed(1)+'" dy="0.32em" style="fill:'+se.color+'">'+se.end(W)+'</text>'; }
+    });
+    s += '</g><g class="cursor" style="display:none"><line x1="0" x2="0" y1="'+m.t+'" y2="'+(H-m.b)+'"/>';
+    cfg.series.forEach(function(se){ s += '<circle r="4" fill="'+se.color+'" stroke="#F6F6F3" stroke-width="2"/>'; });
+    s += '</g><rect class="hit" x="'+m.l+'" y="'+m.t+'" width="'+(W-m.l-m.r)+'" height="'+(H-m.t-m.b)+'" fill="transparent"/></svg>';
+    el.innerHTML = s + '<div class="tip" hidden></div>';
+    clipR = el.querySelector('clipPath rect');
+    tip = el.querySelector('.tip'); cur = el.querySelector('.cursor'); dots = cur.querySelectorAll('circle'); hit = el.querySelector('.hit');
+    var move = function(ev){ var r = el.getBoundingClientRect(); setCursor(isx(ev.clientX - r.left), true); };
+    hit.addEventListener('pointermove', move);
+    hit.addEventListener('pointerdown', move);
+    hit.addEventListener('pointerleave', function(){ setCursor(null, true); });
+  }
+  function nearest(xs, px){ var bi = 0, bd = Infinity; for (var i=0;i<xs.length;i++){ var d = Math.abs(sx(xs[i]) - px); if (d < bd){ bd = d; bi = i; } } return bi; }
+  function setCursor(xv, user){
+    if (!cur) return;
+    if (xv == null){ cur.style.display = 'none'; tip.hidden = true; if (user && cfg.onCursor) cfg.onCursor(null); return; }
+    var px = sx(Math.max(cfg.x.min, Math.min(cfg.x.max, xv)));
+    var i = nearest(cfg.series[0].xs, px), x = sx(cfg.series[0].xs[i]);
+    cur.style.display = '';
+    var ln = cur.querySelector('line'); ln.setAttribute('x1', x); ln.setAttribute('x2', x);
+    cfg.series.forEach(function(se, k){ var y = se.ys[i]; if (cfg.y.log && !(y > 0)){ dots[k].style.display = 'none'; return; }
+      dots[k].style.display = ''; dots[k].setAttribute('cx', sx(se.xs[i])); dots[k].setAttribute('cy', sy(y)); });
+    tip.innerHTML = cfg.tip(i); tip.hidden = false;
+    var tw = tip.offsetWidth;
+    var left = x + 14; if (left + tw > W - 4) left = x - 14 - tw; if (left < 0) left = 2;
+    tip.style.left = left + 'px'; tip.style.top = (m.t + 4) + 'px';
+    if (user && cfg.onCursor) cfg.onCursor(cfg.series[0].xs[i]);
+  }
+  render();
+  if (window.ResizeObserver) new ResizeObserver(render).observe(el); else window.addEventListener('resize', render);
+  return {setCursor:setCursor};
+}
+function si(v){ return v >= 1e6 ? (v/1e6)+'M' : v >= 1e3 ? (v/1e3)+'k' : String(v); }
+
+/* ------------------------------------------------------------------ */
+/* GROWTH charts                                                        */
+/* ------------------------------------------------------------------ */
+(function(){
+  if (!T.length) return;
+  var N = PROD.N, snaps = $('#snaps'), snapEls = $$('.snap', snaps);
+  function highlight(t){
+    if (t == null){ snaps.classList.remove('hovering'); snapEls.forEach(function(s){ s.classList.remove('on'); }); return; }
+    snaps.classList.add('hovering');
+    var best = null, bd = Infinity;
+    snapEls.forEach(function(s){ var d = Math.abs(+s.dataset.t - t); if (d < bd){ bd = d; best = s; } });
+    snapEls.forEach(function(s){ s.classList.toggle('on', s === best); });
+  }
+  var tipN = function(i){
+    return '<b>t = '+PROD.t[i].toFixed(1)+'</b>  step '+fmtInt(PROD.step[i])+'<br><span class="ice">MLP</span>    '+fmtInt(PROD.nmax_mlp[i])+' atoms<br><span style="color:var(--ink)">q̄6 thr</span> '+fmtInt(PROD.nmax_thr[i])+' atoms';
+  };
+  var fracM = PROD.ncr_mlp.map(function(n){ return 100*n/N; }), fracT = PROD.ncr_thr.map(function(n){ return 100*n/N; });
+  var cFrac;
+  var cN = lineChart($('#ch-nmax'), {
+    aria:'Largest crystalline cluster versus time, log scale, MLP and threshold labels',
+    height:function(w){ return w < 520 ? 280 : 340; },
+    margin:function(w){ return {l:46, r:w < 520 ? 14 : 22, t:30, b:44}; },
+    x:{min:0, max:500, ticks:[0,100,200,300,400,500], fmt:String, label:'time t (LJ units)'},
+    y:{min:100, max:2e6, log:true, ticks:[100,1e3,1e4,1e5,1e6], fmt:si, label:'atoms in the largest crystal'},
+    series:[
+      {xs:PROD.t, ys:PROD.nmax_thr, color:'#121212', w:1.3, dash:'5 4'},
+      {xs:PROD.t, ys:PROD.nmax_mlp, color:'#E0351B', w:2.2}
+    ],
+    annotate:function(sx, sy, W, H, m){
+      var s = '';
+      var yN = sy(N);
+      s += '<line class="ann" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+yN+'" y2="'+yN+'"/>';
+      s += '<text class="ann-t" x="'+(m.l+6)+'" y="'+(yN-6)+'">all 1,048,576 atoms</text>';
+      s += '<line class="ann" x1="'+sx(40)+'" x2="'+sx(40)+'" y1="'+m.t+'" y2="'+(H-m.b)+'" style="stroke:#E0351B;stroke-dasharray:3 3"/>';
+      s += '<text class="ann-t" x="'+(sx(40)+6)+'" y="'+sy(30000)+'" style="fill:var(--acc)">seed released, t = 40</text>';
+      var xe = sx(487);
+      s += '<circle cx="'+xe+'" cy="'+sy(428505)+'" r="4" fill="#E0351B"/>';
+      s += '<text class="ann-t" x="'+(xe-8)+'" y="'+(sy(428505)+20)+'" text-anchor="end" style="fill:var(--ink)">428,505</text>';
+      s += '<text class="ann-t" x="'+sx(250)+'" y="'+(sy(300)+4)+'" text-anchor="middle">second-largest cluster: never above 34</text>';
+      return s;
+    },
+    tip:tipN,
+    onCursor:function(t){ cFrac.setCursor(t); highlight(t); }
+  });
+  cFrac = lineChart($('#ch-frac'), {
+    aria:'Crystalline fraction of all atoms versus time',
+    height:function(w){ return w < 520 ? 170 : 190; },
+    margin:function(w){ return {l:46, r:w < 520 ? 14 : 22, t:24, b:44}; },
+    x:{min:0, max:500, ticks:[0,100,200,300,400,500], fmt:String, label:'time t (LJ units)'},
+    y:{min:0, max:50, ticks:[0,10,20,30,40,50], fmt:function(v){ return v+'%'; }, label:'crystalline'},
+    series:[
+      {xs:PROD.t, ys:fracT, color:'#121212', w:1.3, dash:'5 4'},
+      {xs:PROD.t, ys:fracM, color:'#E0351B', w:2.2}
+    ],
+    annotate:function(sx, sy, W, H, m){
+      return '<text class="ann-t" x="'+(sx(487)-6)+'" y="'+(sy(40.9)-8)+'" text-anchor="end" style="fill:var(--ink)">40.9%</text>';
+    },
+    tip:function(i){ return '<b>t = '+PROD.t[i].toFixed(1)+'</b><br><span class="ice">MLP</span>    '+fracM[i].toFixed(2)+'%<br><span style="color:var(--ink)">q̄6 thr</span> '+fracT[i].toFixed(2)+'%'; },
+    onCursor:function(t){ cN.setCursor(t); highlight(t); }
+  });
+  snapEls.forEach(function(s){
+    s.addEventListener('pointerenter', function(){ var t = +s.dataset.t; cN.setCursor(t); cFrac.setCursor(t); highlight(t); });
+    s.addEventListener('pointerleave', function(){ cN.setCursor(null); cFrac.setCursor(null); highlight(null); });
+  });
+})();
+
+/* ------------------------------------------------------------------ */
+/* SPEED chart                                                          */
+/* ------------------------------------------------------------------ */
+(function(){
+  if (!SPD.N) return;
+  var lab = {cpu1:['1 CPU core','1 core'], cpu10:['10 cores','10 cores'], cpu20:['20 cores (node)','20 cores'], gpu1:['1 P100','1 P100'], gpu2:['2 P100','2 P100']};
+  var col = {cpu1:'#121212', cpu10:'#5C5C58', cpu20:'#9A9A95', gpu1:'#E0351B', gpu2:'#E0351B'};
+  var keys = ['cpu1','cpu10','cpu20','gpu1','gpu2'];
+  lineChart($('#ch-speed'), {
+    aria:'Milliseconds per MD step versus number of atoms for 1, 10 and 20 CPU cores and 1 and 2 P100 GPUs, log-log axes',
+    height:function(w){ return w < 520 ? 320 : 380; },
+    margin:function(w){ return {l:46, r:w < 520 ? 70 : 112, t:30, b:44}; },
+    x:{min:26000, max:1.05e6, log:true, ticks:SPD.N, fmt:function(v){ return Math.round(v/1000)+'k'; }, label:'atoms N'},
+    y:{min:0.8, max:2500, log:true, ticks:[1,10,100,1000], fmt:function(v){ return v>=1000?'1,000':String(v); }, label:'ms per MD step'},
+    series:keys.map(function(k){ return {xs:SPD.N, ys:SPD[k], color:col[k], w:k.indexOf('gpu')===0?2.2:1.3, dash:k==='gpu2'?'5 4':null, markers:true,
+      end:function(W){ return lab[k][W < 520 ? 1 : 0]; }}; }),
+    tip:function(i){
+      var r = '<b>N = '+fmtInt(SPD.N[i])+'</b>';
+      keys.forEach(function(k){ r += '<br><span style="color:'+col[k]+'">'+lab[k][1]+'</span> '+SPD[k][i].toFixed(2)+' ms'; });
+      r += '<br>1 P100 vs node: '+(SPD.cpu20[i]/SPD.gpu1[i]).toFixed(1)+'x';
+      return r;
+    }
+  });
+})();
+
+/* ------------------------------------------------------------------ */
+/* BYTES chart                                                          */
+/* ------------------------------------------------------------------ */
+(function(){
+  if (!T.length) return;
+  function fb(v){ return v >= 1 ? v+' GB' : v >= 1e-3 ? Math.round(v*1000)+' MB' : Math.round(v*1e6)+' kB'; }
+  lineChart($('#ch-bytes'), {
+    aria:'Cumulative bytes written over the production run: full dump, in situ, labels only, log scale',
+    height:function(w){ return w < 520 ? 300 : 360; },
+    margin:function(w){ return {l:56, r:w < 520 ? 66 : 92, t:30, b:44}; },
+    x:{min:0, max:500, ticks:[0,100,200,300,400,500], fmt:String, label:'time t (LJ units)'},
+    y:{min:1e-4, max:80, log:true, ticks:[1e-3,1e-2,1e-1,1,10], fmt:fb, label:'written so far'},
+    series:[
+      {xs:PROD.t, ys:PROD.gb_full, color:'#121212', w:1.8, end:function(){ return '24.51 GB'; }},
+      {xs:PROD.t, ys:PROD.gb_insitu, color:'#E0351B', w:2.2, end:function(){ return '1.85 GB'; }},
+      {xs:PROD.t, ys:PROD.gb_labels, color:'#E0351B', w:1.6, dash:'5 4', end:function(){ return '0.53 GB'; }}
+    ],
+    tip:function(i){
+      return '<b>t = '+PROD.t[i].toFixed(1)+'</b><br><span class="ember">full dump</span> '+PROD.gb_full[i].toFixed(2)+' GB<br><span class="ice">in situ</span>   '+PROD.gb_insitu[i].toFixed(3)+' GB<br><span class="ice">labels</span>    '+PROD.gb_labels[i].toFixed(3)+' GB';
+    }
+  });
+})();
+
+/* ------------------------------------------------------------------ */
+/* 111 matched analysis steps, two layouts                              */
+/* ------------------------------------------------------------------ */
+(function(){
+  var host = $('#steps111'); if (!host) return;
+  var cells = new Array(112).join('<i></i>');
+  host.innerHTML = [['2 SIM + 1 ANA ranks','3,552,000 labels, 0 mismatches'],['4 SIM + 2 ANA ranks','3,552,000 labels, 0 mismatches']].map(function(r){
+    return '<div class="row"><div class="rl"><span>'+r[0]+'</span><span class="ice">'+r[1]+'</span></div><div class="cells">'+cells+'</div></div>';
+  }).join('');
+})();
+
+/* ------------------------------------------------------------------ */
+/* warp illustration                                                    */
+/* ------------------------------------------------------------------ */
+(function(){
+  var svg = $('#warp-cause'); if (!svg) return;
+  function panel(ox, scattered, title){
+    var s = '<text x="'+ox+'" y="10">'+title+'</text>';
+    var cs = 14, gx = ox, gy = 46;
+    for (var r=0;r<4;r++) for (var c=0;c<8;c++) s += '<rect x="'+(gx+c*cs)+'" y="'+(gy+r*cs)+'" width="'+(cs-2)+'" height="'+(cs-2)+'" fill="none" stroke="rgba(18,18,18,.3)"/>';
+    var targets = scattered ? [[0,0],[7,3],[3,1],[6,0],[1,3],[5,2],[2,2],[7,1]] : [[3,1],[3,1],[4,1],[3,2],[4,2],[3,1],[4,1],[4,2]];
+    for (var t=0;t<8;t++){
+      var tx = gx + 4 + t*cs, ty = 24;
+      var cx = gx + targets[t][0]*cs + 6, cy = gy + targets[t][1]*cs + 6;
+      s += '<line x1="'+(tx+2)+'" y1="'+(ty+4)+'" x2="'+cx+'" y2="'+cy+'" stroke="'+(scattered?'#8A8A85':'#121212')+'" stroke-width="1" opacity=".8"/>';
+      s += '<rect x="'+tx+'" y="'+(ty-4)+'" width="5" height="8" fill="#121212"/>';
+      s += '<rect x="'+(cx-3)+'" y="'+(cy-3)+'" width="6" height="6" fill="'+(scattered?'#8A8A85':'#121212')+'"/>';
+    }
+    return s;
+  }
+  svg.innerHTML = panel(2, true, 'warp, memory order') + panel(140, false, 'warp, cell order');
+})();
+
+})();
+</script>
+</body>
+</html>
