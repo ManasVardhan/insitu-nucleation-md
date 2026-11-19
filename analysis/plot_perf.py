@@ -147,10 +147,12 @@ if len(sc):
         ax[0].errorbar(P[~over], s[~over], yerr=ds[~over], color=col, marker=mk, label=lab, capsize=2)
         ax[1].plot(P[~over], eff[~over], color=col, marker=mk, label=lab)
         if over.any():
-            ax[0].plot(P[over], s[over], color=col, marker=mk, mfc="white", ls="none")
-            ax[1].plot(P[over], eff[over], color=col, marker=mk, mfc="white", ls="none")
-            ax[0].annotate("4 ranks on 2 P100", (P[over][0], s[over][0]), xytext=(6, -2),
-                           textcoords="offset points", fontsize=8, color=INK)
+            # 4 ranks sharing 2 P100: still 2 GPUs, so plot at 2 (efficiency per GPU)
+            ax[0].plot([2], s[over], color=col, marker=mk, mfc="white", ls="none")
+            ax[1].plot([2], s[over] / 2, color=col, marker=mk, mfc="white", ls="none")
+            for k_, y_ in [(0, s[over][0]), (1, s[over][0] / 2)]:
+                ax[k_].annotate("2 P100, 2 ranks each", (2, y_), xytext=(7, 7),
+                                textcoords="offset points", va="center", fontsize=8, color=INK)
         for p_, t_, s_, e_, sd_ in zip(P, d["mean"], s, eff, d["std"]):
             rows.append(dict(path=lab, P=p_, step=t_, std=sd_, S=s_, E=e_))
     pmax = sc.sim_ranks.max()
@@ -162,10 +164,11 @@ if len(sc):
         ax[k].set_xlabel("ranks P (cores on the CPU path, GPUs on the GPU path)")
     ax[0].set_yscale("log", base=2); ax[0].set_yticks([1, 2, 4, 8, 16], ["1", "2", "4", "8", "16"])
     ax[0].set_ylabel("speedup t(1) / t(P)"); ax[1].set_ylabel("parallel efficiency")
-    ax[1].set_ylim(0, 1.15)
+    ax[1].set_ylim(0, 1.25)
     ax[0].legend(loc="upper left", fontsize=8)
     title(ax[0], "Strong scaling: speedup"); title(ax[1], "Strong scaling: efficiency")
-    note(fig, "Fixed N. " + HW + ". Hollow marker: 4 ranks sharing 2 GPUs (not 4 GPUs).")
+    note(fig, "Fixed N. " + HW + ". Hollow marker: N = 1,048,576 with 4 ranks sharing the 2 GPUs "
+         "(production layout); its efficiency is per GPU.")
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_strong_scaling.png")); plt.close(fig)
     print("\n### strong scaling\n")
     print(md(pd.DataFrame(rows), [("run", "path"), ("P", "P"), ("step ms", "step"), ("std", "std"),
@@ -182,10 +185,6 @@ if len(sc):
         d = a[(a.exp == e) & (a.config == c)].sort_values("sim_ranks")
         if not len(d):
             continue
-        if c == "gpu_weak_262k" and e == "scaling":
-            # 4 ranks x 262,144 on 2 P100 = the 1M strong-scaling run at P = 4
-            d4 = a[(a.exp == e) & (a.config == "gpu_strong_1M") & (a.sim_ranks == 4)]
-            d = pd.concat([d, d4])
         P = d.sim_ranks.values; t = d["mean"].values; eff = t[0] / t
         over = (c == "gpu_weak_262k") & (e == "scaling") & (P > 2)
         ax[0].errorbar(P[~over], t[~over], yerr=d["std"].fillna(0).values[~over], color=col,
