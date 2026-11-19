@@ -1,0 +1,3 @@
+exp,config,bin,sim_ranks,ana_ranks,ana_threads,placement,K,nglob,steps,rep,step_ms,force_ms,comm_ms,wall_s,stall_total,stall_max,halo_total,pack_total,ana_steps,t_ana_mean,t_ana_max,bytes_insitu,bytes_fulldump,nodes,gpu,cpu,jobid
+sortfix,off,pmd_insitu,4,0,2,same,0,1048576,15000,1,18.8175,7.8881,1.7304,282.2621,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14363770
+sortfix,on,pmd_insitu,4,4,2,same,100,1048576,15000,1,20.0920,7.8823,1.8560,301.3794,0.0002,0.0000,0.9503,0.1598,150,0.9604,1.0202,1162610,3774878400,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14363770
