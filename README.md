@@ -453,8 +453,8 @@ matters for storage (24.5 GB for this one run) and grows with N and with more fr
 - **Some causes are inferred, not measured:** the per-core slowdown of the CPU path when 8 or more
   cores of a socket are busy (likely lower turbo clock and shared L3 and memory bandwidth), the
   constant ~0.5 ms in situ cost at any K (consistent with idle ANA ranks busy-polling in
-  `MPI_Probe`), and the 4 to 5 ms gap between the production run's hold (about 37 ms per step) and a
-  15,000-step reproduction (32 to 33 ms).
+  `MPI_Probe`), and the gap of about 4 ms between the production run (36.4 ms per step averaged over the whole run, 59:09 for 97,400 steps including startup; per-step timing
+  was not logged) and a 15,000-step reproduction (32 to 33 ms).
 - **I/O is reported in bytes**, not seconds; the code does not time file writes separately.
 
 ---

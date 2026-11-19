@@ -1,8 +1,8 @@
 # T3.1 fallback production run on one debug node (2x P100, 4 SIM ranks
 # sharing the 2 GPUs + 4 ANA ranks), 1 h limit: hold shortened to 105k.
 # N = 4*64^3 = 1048576 atoms at rho* = 0.95 (box L = 103.4), 4 SIM ranks
-# (vproc 2 2 1, one A100 each, 2 nodes) + 4 ANA ranks (CPU, OpenMP).
-# Melt at T* = 2.0, ramp to T_q = 0.70 over 2000 steps, hold 150000 steps.
+# (vproc 2 2 1, two per P100) + 4 ANA ranks (CPU, OpenMP).
+# Melt at T* = 2.0, ramp to T_q = 0.70 over 2000 steps, hold 105000 steps.
 # Spherical FCC seed R = 4.5 (369 atoms) at the box center, frozen until
 # 1000 steps after the ramp. Analysis every 100 steps; movie snapshot
 # every 10 analysis steps (1000 MD steps).

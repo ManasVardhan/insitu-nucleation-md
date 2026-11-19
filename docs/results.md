@@ -399,8 +399,8 @@ production protocol with a `WALL` line (cumulative wall, force and MD communicat
   and the energies agree to all printed digits over 3000 steps. The force call is now 7.8 to 7.9 ms
   from start to end, and the step time on the production protocol drops from 31.8 to 18.7 ms in the
   hold (1.7x), with no drift.
-- The remaining 4 to 5 ms between the drift plateau (32 to 33 ms) and the production average (about
-  37 ms in the hold) was not reproduced in these 15,000-step runs. Candidates are the analysis load
+- The remaining gap of about 4 ms between the drift plateau (32 to 33 ms) and the production average
+  (36.4 ms per step averaged over the whole run, 59:09 for 97,400 steps including startup; per-step timing was not logged) was not reproduced in these 15,000-step runs. Candidates are the analysis load
   that grows with the crystal (t_analysis 1.1 to 2.5 s on cores shared with the SIM ranks) and the
   movie snapshots (every 1000 steps, not used in these runs). Not measured.
 - **Sections 1 to 4 were first measured with the original kernel**, and the speedup, the one-node
@@ -463,7 +463,7 @@ Last 500 steps, ms per step (speedup over the 20-core CPU path):
   runs of `perf_insitu.slurm` wrote `InsituInterval 0`, and `insitu_nsteps()` looped forever on it
   while the other ranks waited in `MPI_Comm_split_type` (found with gdb on the hung ranks). Fixed in
   the code (commit 0aca834) and the inputs. Three job slots were lost to it, no data was affected.
-- **Residual production slowdown.** The production run's hold (about 37 ms per step) is 4 to 5 ms
+- **Residual production slowdown.** The production run (36.4 ms per step averaged over the whole run, 59:09 for 97,400 steps including startup) is about 4 ms
   slower than the 15,000-step drift plateau of the same layout (32 to 33 ms). Not reproduced or
   explained (candidates: growing analysis load on the shared cores, movie snapshots).
 - **Per-rank force times are noisy when 2 ranks share a GPU** (11.5 to 14.4 ms between identical

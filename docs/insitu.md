@@ -179,7 +179,7 @@ debug limit (`runs/production/prod_p100.in`).
 | Protocol | melt T* = 2.0 for 5000 steps, ramp to T_q = 0.70 over 2000, hold; seed R = 4.5 (369 atoms) frozen to step 8000 |
 | Analysis | every K = 100 steps from step 100; movie snapshot every 1000 steps |
 | Steps | 97,400 of the planned 112,000 (hold steps 0 to 90,400); stopped by the 59 min time limit (job 14361069, TIMEOUT). Summary and label rows are flushed every analysis step, so all 974 analysis steps up to 97,400 are complete |
-| Wall time | 59:09 including startup; 36.4 ms/step on average, about 37 ms/step in the hold |
+| Wall time | 59:09 including startup; 36.4 ms/step on average (per-step timing was not logged) |
 
 The step time is slower than in the 4000-step smoke tests on the same node (26 to 28 ms/step, below).
 Measured later (`docs/results.md`, section 8): the GPU force call slowed down from 10 to 19 ms per
@@ -230,7 +230,7 @@ Over the 974 analysis steps (K = 100):
 
 | Quantity | Value |
 |---|---|
-| K x step time (MD time between analysis steps) | about 3.7 s |
+| K x step time (MD time between analysis steps) | about 3.6 s |
 | t_analysis (max over ANA ranks + root clustering and I/O) | mean 1.36 s, max 2.61 s (grows with the crystal: 1.1 s early, 2.5 s at the end) |
 | of which features + MLP (t_feat) | mean 1.04 s (262k residents + ~85k halo atoms per ANA rank, 2 threads) |
 | of which root cluster search + label/movie I/O | mean 0.32 s, max 1.52 s (movie steps) |
@@ -239,7 +239,7 @@ Over the 974 analysis steps (K = 100):
 | SIM analysis halo exchange + packing (max over SIM) | 7.0 ms + 1.5 ms per analysis step = 0.085 ms/step (0.2% of the step) |
 
 The analysis takes at most 70% of the MD time between analysis steps, so it never holds the SIM
-ranks back: the stall is zero. The ANA ranks are idle at least 1.6 s of every 3.7 s cycle.
+ranks back: the stall is zero. The ANA ranks are idle at least 1.0 s of every 3.6 s cycle (max t_analysis 2.61 s).
 
 Same node, analysis on vs off (`runs/production/smoke*.in`, N = 1,048,576, 4000 steps: melt 1000,
 ramp 500, hold 2500):
@@ -286,7 +286,7 @@ On CARC (`~/insitu-nucleation-md` = `/home1/mvardhan/insitu-nucleation-md`):
 | `runs/production/smoke_debug/`, `smoke_p100/`, `smoke_noana_p100/` | 1M-atom smoke tests (4 movie frames each) | 0.1 GB |
 | `runs/insitu_check/out_2x1/`, `out_4x2/` | T2.5 dumps and in situ output | 0.5 GB |
 
-In this repository: `runs/production/results/p100/` (summary, log, input, slurm output),
+In this repository: `runs/production/results/p100/` (summary, log, input),
 `runs/production/results/smoke_debug/`, `runs/insitu_check/results/`.
 
 For the movie: `analysis/insitu_read.py: read_movie()` returns positions (wrapped into the box) and
