@@ -36,6 +36,7 @@ int insitu_is_step(const insitu_cfg *c, int step) {
 
 int insitu_nsteps(const insitu_cfg *c) {
   int s,k = 0;
+  if (c->nana <= 0 || c->interval <= 0) return 0; /* analysis off */
   for (s=c->interval; s<=c->last; s+=c->interval)
     if (insitu_is_step(c,s)) k++;
   return k;

@@ -32,6 +32,7 @@ mk_md() {
 # default), shortened; analysis every K steps, no movie, StepAvg 500.
 mk_seeded() {
   local f=$1 K=$2 P=$3 sm=$4 sq=$5 sh=$6 vp=${7:-"2 2 1"} uc=${8:-"32 32 64"}
+  [ "$K" -gt 0 ] || K=100   # K is unused when P = 0 (analysis off)
   { echo "vproc $vp"; echo "InitUcell $uc"; echo "Density 0.95"
     echo "InitTemp 2.0"; echo "DeltaT 0.005"; echo "StepAvg 500"
     echo "Thermostat 1"; echo "TauT 0.1"; echo "TMelt 2.0"; echo "StepMelt $sm"

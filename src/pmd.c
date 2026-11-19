@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
     printf("Insitu: SIM %d ANA %d K %d start %d steps %d movie %d check %d\n",
            nproc,InsituRanks,InsituInterval,InsituStart,insitu_nsteps(&icfg),
            InsituMovie,InsituCheck);
+  abort_if(InsituRanks > 0 && InsituInterval <= 0, "InsituInterval must be > 0");
   if (InsituRanks > 0)
     for (a=0; a<3; a++)
       abort_if(al[a] < 2.0*icfg.rq, "subdomain thinner than the analysis halo");
