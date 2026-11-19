@@ -6,6 +6,11 @@ Reads every <exp>_<jobid>.csv written by scripts/perf_lib.sh (smoke runs are
 skipped), the in situ summaries summary_<jobid>_<tag>_r<rep>.dat and the
 drift_<jobid>_<tag>.wall files. Writes docs/img/perf_*.png and prints the
 tables of docs/results.md (mean +- sample std over repeats).
+
+Files with "_cellorder" in the name were measured after the force kernel fix
+(commit 9d1a074: threads in cell order); all others with the original
+host-order kernel. Where both exist, the figures show the cell-order runs and
+draw the host-order GPU runs as faded dashed lines ("before the fix").
 """
 import glob
 import os
@@ -27,9 +32,14 @@ HW = "debug node e23-02: 2x Tesla P100-PCIE-16GB, 2x Xeon E5-2640 v4 (10 cores e
 
 def load():
     fs = [f for f in glob.glob(os.path.join(RES, "*.csv")) if "smoke" not in f]
-    df = pd.concat([pd.read_csv(f) for f in fs], ignore_index=True)
+    parts = []
+    for f in fs:
+        d = pd.read_csv(f)
+        d["kernel"] = "cell" if "_cellorder" in os.path.basename(f) else "host"
+        parts.append(d)
+    df = pd.concat(parts, ignore_index=True)
     for c in df.columns:
-        if c not in ("exp", "config", "bin", "placement", "nodes", "gpu", "cpu", "jobid"):
+        if c not in ("exp", "config", "bin", "placement", "nodes", "gpu", "cpu", "jobid", "kernel"):
             df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
@@ -61,7 +71,14 @@ df = load()
 print("rows:", len(df), "experiments:", sorted(df.exp.unique()))
 
 # ---------------------------------------------------------------- speedup
-sp = df[df.exp == "speedup"]
+def newest(d):
+    """The cell-order rows if any exist, else the host-order rows."""
+    return d[d.kernel == "cell"] if (d.kernel == "cell").any() else d
+
+
+sp_all = df[df.exp == "speedup"]
+sp = newest(sp_all)
+sp_old = sp_all[sp_all.kernel == "host"] if (sp_all.kernel == "cell").any() else sp_all.iloc[:0]
 if len(sp):
     a = agg(sp, ["config", "nglob"])
     f = sp.groupby(["config", "nglob"])["force_ms"].mean().reset_index()
@@ -76,9 +93,15 @@ if len(sp):
         if c not in piv:
             continue
         ax[0].errorbar(piv.index, piv[c], yerr=sd[c], color=col, marker=mk, label=lab, capsize=2)
+    if len(sp_old):
+        po = agg(sp_old, ["config", "nglob"]).pivot(index="nglob", columns="config", values="mean")
+        for c, lab, col, mk in S:
+            if c.startswith("gpu") and c in po:
+                ax[0].plot(po.index, po[c], color=col, marker=mk, ms=3, ls="--", lw=1, alpha=0.5,
+                           label=lab + ", before the fix")
     ax[0].set_xscale("log"); ax[0].set_yscale("log")
     ax[0].set_xlabel("atoms N"); ax[0].set_ylabel("time per MD step (ms)")
-    ax[0].legend(loc="upper left")
+    ax[0].legend(loc="upper left", fontsize=7)
     title(ax[0], "Step time vs N")
     R = [("cpu1", "gpu1", "1 P100 vs 1 core", VERMILLION, "s"),
          ("cpu10", "gpu1", "1 P100 vs 1 socket", ORANGE, "^"),
@@ -90,10 +113,14 @@ if len(sp):
         dy = {"cpu10": -5, "cpu20": 0, "cpu1": 0}[c0] if c1 == "gpu1" else 5
         ax[1].annotate("%.1fx" % sr.iloc[-1], (piv.index[-1], sr.iloc[-1]), xytext=(5, dy),
                        textcoords="offset points", va="center", fontsize=8, color=INK)
+        if len(sp_old) and c0 == "cpu20":
+            so = po[c0] / po[c1]
+            ax[1].plot(so.index, so, color=col, marker=mk, ms=3, ls="--", lw=1, alpha=0.5,
+                       label=lab + ", before the fix")
     ax[1].axhline(1, color=MUTED, lw=0.8, ls=":")
     ax[1].set_xscale("log"); ax[1].set_yscale("log")
     ax[1].set_xlabel("atoms N"); ax[1].set_ylabel("speedup (CPU time / GPU time)")
-    ax[1].set_ylim(0.5, 70); ax[1].legend(loc="lower left")
+    ax[1].set_ylim(0.5, 70); ax[1].legend(loc="lower left", fontsize=7)
     title(ax[1], "GPU speedup")
     g = a[a.config == "gpu1"].sort_values("nglob")
     x = np.arange(len(g))
@@ -107,18 +134,23 @@ if len(sp):
     ax[2].legend(loc="upper left"); ax[2].grid(axis="x", visible=False)
     title(ax[2], "1-GPU step: force call vs host (host %)")
     note(fig, "Same global box for every layout (rho* = 0.95, FCC start at T* = 2.0, NVE). " + HW +
-         ". Error bars: sample std over 3 repeats (cpu1: 2).")
+         ". Error bars: sample std over 3 repeats (cpu1: 2)." +
+         ("\nCell-order force kernel; dashed: original host-order kernel." if len(sp_old) else ""))
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_speedup.png")); plt.close(fig)
-    t = a.pivot(index="nglob", columns="config", values="mean").reset_index()
-    t["s_core"] = t.cpu1 / t.gpu1; t["s_node"] = t.cpu20 / t.gpu1; t["s_node2"] = t.cpu20 / t.gpu2
-    print("\n### speedup\n")
-    print(md(t, [("N", "nglob"), ("CPU 1 core", "cpu1"), ("CPU 10 cores", "cpu10"),
-                 ("CPU 20 cores", "cpu20"), ("1 P100", "gpu1"), ("2 P100", "gpu2"),
-                 ("1 P100 vs 1 core", "s_core"), ("1 P100 vs node", "s_node"),
-                 ("2 P100 vs node", "s_node2")],
-             {k: (lambda v: "%.2f" % v) for k in ["cpu1", "cpu10", "cpu20", "gpu1", "gpu2"]} |
-             {k: (lambda v: "%.1fx" % v) for k in ["s_core", "s_node", "s_node2"]} |
-             {"nglob": lambda v: "{:,}".format(int(v))}))
+    for kern, dd in [("cell-order kernel" if len(sp_old) else "", sp), ("host-order kernel", sp_old)]:
+        if not len(dd):
+            continue
+        t = agg(dd, ["config", "nglob"]).pivot(index="nglob", columns="config",
+                                               values="mean").reset_index()
+        t["s_core"] = t.cpu1 / t.gpu1; t["s_node"] = t.cpu20 / t.gpu1; t["s_node2"] = t.cpu20 / t.gpu2
+        print("\n### speedup %s\n" % kern)
+        print(md(t, [("N", "nglob"), ("CPU 1 core", "cpu1"), ("CPU 10 cores", "cpu10"),
+                     ("CPU 20 cores", "cpu20"), ("1 P100", "gpu1"), ("2 P100", "gpu2"),
+                     ("1 P100 vs 1 core", "s_core"), ("1 P100 vs node", "s_node"),
+                     ("2 P100 vs node", "s_node2")],
+                 {k: (lambda v: "%.2f" % v) for k in ["cpu1", "cpu10", "cpu20", "gpu1", "gpu2"]} |
+                 {k: (lambda v: "%.1fx" % v) for k in ["s_core", "s_node", "s_node2"]} |
+                 {"nglob": lambda v: "{:,}".format(int(v))}))
     print("\n(per-rank std)\n")
     print(md(a.sort_values(["config", "nglob"]), [("config", "config"), ("N", "nglob"),
                                                     ("step ms", "mean"), ("std", "std"),
@@ -127,16 +159,25 @@ if len(sp):
               "force_ms": lambda v: "%.3f" % v}))
 
 # ---------------------------------------------------------------- scaling
-sc = df[df.exp.isin(["scaling", "scaling_multi"])]
+sc_one = df[df.exp == "scaling"]
+sc = pd.concat([newest(sc_one), df[df.exp == "scaling_multi"]])
 if len(sc):
     a = agg(sc, ["exp", "config", "sim_ranks", "nglob"])
+    if (sc_one.kernel == "cell").any():
+        # GPU runs with the original kernel, drawn dashed for comparison
+        o = sc_one[(sc_one.kernel == "host") & sc_one.config.str.startswith("gpu")]
+        o = agg(o, ["exp", "config", "sim_ranks", "nglob"]); o["exp"] = "scaling_old"
+        a = pd.concat([a, o], ignore_index=True)
+    OLD = dict(ls="--", alpha=0.5, ms=4)
     fig, ax = plt.subplots(1, 2, figsize=(10.5, 4.2))
     S = [("scaling", "cpu_strong_256k", "CPU path, N = 256,000", PINK, "v"),
          ("scaling", "gpu_strong_256k", "GPU path, N = 256,000", GREEN, "D"),
          ("scaling", "gpu_strong_1M", "GPU path, N = 1,048,576", BLUE, "o"),
-         ("scaling_multi", "gpu_strong_1M", "GPU path, N = 1,048,576 (multi-node)", ORANGE, "s")]
+         ("scaling_multi", "gpu_strong_1M", "GPU path, N = 1,048,576 (multi-node, original kernel)", ORANGE, "s"),
+         ("scaling_old", "gpu_strong_1M", "GPU path, N = 1,048,576, before the fix", BLUE, "o")]
     rows = []
     for e, c, lab, col, mk in S:
+        sty = OLD if e == "scaling_old" else {}
         d = a[(a.exp == e) & (a.config == c)].sort_values("sim_ranks")
         if not len(d):
             continue
@@ -146,10 +187,11 @@ if len(sc):
         eff = s / P
         ds = s * np.sqrt((d["std"].fillna(0).values / d["mean"].values) ** 2 +
                          (d["std"].fillna(0).iloc[0] / t1) ** 2)
-        over = (c == "gpu_strong_1M") & (e == "scaling") & (P > 2)
-        ax[0].errorbar(P[~over], s[~over], yerr=ds[~over], color=col, marker=mk, label=lab, capsize=2)
-        ax[1].plot(P[~over], eff[~over], color=col, marker=mk, label=lab)
-        if over.any():
+        over = (c == "gpu_strong_1M") & (e in ("scaling", "scaling_old")) & (P > 2)
+        ax[0].errorbar(P[~over], s[~over], yerr=ds[~over], color=col, marker=mk, label=lab, capsize=2,
+                       **sty)
+        ax[1].plot(P[~over], eff[~over], color=col, marker=mk, label=lab, **sty)
+        if over.any() and e == "scaling":
             # 4 ranks sharing 2 P100: still 2 GPUs, so plot at 2 (efficiency per GPU)
             ax[0].plot([2], s[over], color=col, marker=mk, mfc="white", ls="none")
             ax[1].plot([2], s[over] / 2, color=col, marker=mk, mfc="white", ls="none")
@@ -171,7 +213,8 @@ if len(sc):
     ax[0].legend(loc="upper left", fontsize=8)
     title(ax[0], "Strong scaling: speedup"); title(ax[1], "Strong scaling: efficiency")
     note(fig, "Fixed N. " + HW + ". Hollow marker: N = 1,048,576 with 4 ranks sharing the 2 GPUs "
-         "(production layout); its efficiency is per GPU.")
+         "(production layout); its efficiency is per GPU.\nGPU path: cell-order force kernel; "
+         "dashed: original host-order kernel.")
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_strong_scaling.png")); plt.close(fig)
     print("\n### strong scaling\n")
     print(md(pd.DataFrame(rows), [("run", "path"), ("P", "P"), ("step ms", "step"), ("std", "std"),
@@ -182,17 +225,19 @@ if len(sc):
     fig, ax = plt.subplots(1, 2, figsize=(10.5, 4.0))
     W = [("scaling", "cpu_weak_32k", "CPU path, 32,000 atoms/core", PINK, "v"),
          ("scaling", "gpu_weak_262k", "GPU path, 262,144 atoms/GPU", BLUE, "o"),
-         ("scaling_multi", "gpu_weak_262k", "GPU path, 262,144 atoms/GPU (multi-node)", ORANGE, "s")]
+         ("scaling_multi", "gpu_weak_262k", "GPU path, 262,144 atoms/GPU (multi-node, original kernel)", ORANGE, "s"),
+         ("scaling_old", "gpu_weak_262k", "GPU path, 262,144 atoms/GPU, before the fix", BLUE, "o")]
     rows = []
     for e, c, lab, col, mk in W:
+        sty = OLD if e == "scaling_old" else {}
         d = a[(a.exp == e) & (a.config == c)].sort_values("sim_ranks")
         if not len(d):
             continue
         P = d.sim_ranks.values; t = d["mean"].values; eff = t[0] / t
         over = (c == "gpu_weak_262k") & (e == "scaling") & (P > 2)
         ax[0].errorbar(P[~over], t[~over], yerr=d["std"].fillna(0).values[~over], color=col,
-                       marker=mk, label=lab, capsize=2)
-        ax[1].plot(P[~over], eff[~over], color=col, marker=mk, label=lab)
+                       marker=mk, label=lab, capsize=2, **sty)
+        ax[1].plot(P[~over], eff[~over], color=col, marker=mk, label=lab, **sty)
         if over.any():
             ax[0].plot(P[over], t[over], color=col, marker=mk, mfc="white", ls="none")
             ax[1].plot(P[over], eff[over], color=col, marker=mk, mfc="white", ls="none")
@@ -209,7 +254,8 @@ if len(sc):
     ax[1].axhline(1, color=MUTED, lw=1, ls="--")
     ax[0].legend(loc="lower right", fontsize=8)
     title(ax[0], "Weak scaling: step time"); title(ax[1], "Weak scaling: efficiency")
-    note(fig, "Fixed N per rank. " + HW + ".")
+    note(fig, "Fixed N per rank. " + HW + ". GPU path: cell-order force kernel; dashed: original "
+         "host-order kernel.")
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_weak_scaling.png")); plt.close(fig)
     print("\n### weak scaling\n")
     print(md(pd.DataFrame(rows), [("run", "path"), ("P", "P"), ("N", "N"), ("step ms", "step"),
@@ -219,6 +265,7 @@ if len(sc):
 
 # ---------------------------------------------------------------- in situ overhead
 ins = df[df.exp.isin(["insitu", "insitu_sep"])].copy()
+ins.loc[ins.kernel == "cell", "exp"] = ins.loc[ins.kernel == "cell", "exp"] + "_cell"
 if len(ins):
     def lab(r):
         if r.ana_ranks == 0:
@@ -236,7 +283,7 @@ if len(ins):
              "K=100, P_ana=1", "K=100, P_ana=4, ANA on a 2nd node"]
     g["o"] = g.label.map({k: i for i, k in enumerate(order)})
     g = g.sort_values(["exp", "o"])
-    exps = [e for e in ["insitu", "insitu_sep"] if e in g.exp.values]
+    exps = [e for e in ["insitu", "insitu_sep", "insitu_cell"] if e in g.exp.values]
     rows = []
     for e in exps:
         d = g[g.exp == e]
@@ -253,13 +300,14 @@ if len(ins):
                              hp=1e3 * (r.halo + r.pack) / r.steps if r.P > 0 else np.nan))
     R = pd.DataFrame(rows)
     B = R[R.run != "off"].copy()
-    B["grp"] = [("2nd node" if "2nd node" in l else ("P" if "P_ana=4" not in l else "K"))
-                for l in B.run]
+    B["grp"] = [("cell" if j == "insitu_cell" else
+                 ("2nd node" if "2nd node" in l else ("P" if "P_ana=4" not in l else "K")))
+                for l, j in zip(B.run, B.job)]
     B["key"] = B.run.map({k: i for i, k in enumerate(order)})
     B = B.sort_values(["job", "key"])
     fig, ax = plt.subplots(figsize=(10, 4.4))
     x = np.arange(len(B))
-    cmap_ = {"K": BLUE, "P": GREEN, "2nd node": ORANGE}
+    cmap_ = {"K": BLUE, "P": GREEN, "2nd node": ORANGE, "cell": VERMILLION}
     ax.bar(x, B.over, yerr=B.over_err, color=[cmap_[k] for k in B.grp], width=0.62, capsize=3,
            error_kw=dict(ecolor=INK, lw=1))
     for i, (o, e_, m, f_) in enumerate(zip(B.over, B.over_err, B.step, B.off)):
@@ -268,20 +316,22 @@ if len(ins):
     ax.axhline(0, color=INK, lw=0.8)
     lab = [l.replace(", ANA on a 2nd node", "\nANA on 2nd node").replace(", P_ana", "\nP_ana")
            for l in B.run]
-    lab = [l + ("\n(other job)" if j == "insitu_sep" and "2nd" not in l else "") for l, j in zip(lab, B.job)]
+    lab = [l + ("\n(other job)" if j == "insitu_sep" and "2nd" not in l else "") +
+           ("\ncell-order kernel" if j == "insitu_cell" else "") for l, j in zip(lab, B.job)]
     ax.set_xticks(x, lab, fontsize=8)
     ax.set_ylabel("SIM step time vs analysis off (%)")
     ax.set_ylim(min(-1, B.over.min() - 1), (B.over + B.over_err).max() * 1.35 + 1)
     ax.grid(axis="x", visible=False)
     for k, l in [("K", "ANA on the GPU node, P_ana = 4, vary K"),
                  ("P", "ANA on the GPU node, K = 100, vary P_ana"),
-                 ("2nd node", "ANA on a separate CPU node")]:
+                 ("2nd node", "ANA on a separate CPU node"),
+                 ("cell", "fixed (cell-order) force kernel, ANA on the GPU node")]:
         if (B.grp == k).any():
             ax.bar([np.nan], [np.nan], color=cmap_[k], label=l)
     ax.legend(loc="upper right", fontsize=8)
     title(ax, "In situ overhead on the SIM ranks (N = 1,048,576, 4 SIM ranks on 2 P100)")
     note(fig, "3000 steps (melt, quench, seeded hold), every rank on 2 cores, 2 OpenMP threads per ANA "
-         "rank, 3 runs each.\nBaseline: mean of the off runs of the same job. Error bars: "
+         "rank, 3 runs each. All bars but the last: original force kernel.\nBaseline: mean of the off runs of the same job. Error bars: "
          "sample std propagated from both. Off: %s ms." % ", ".join(
              "%.2f +- %.2f" % (a_, b_) for a_, b_ in R[R.run == "off"][["step", "std"]].values))
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_insitu_overhead.png")); plt.close(fig)
@@ -302,18 +352,18 @@ if len(ins):
     for f in glob.glob(os.path.join(RES, "summary_*_r*.dat")):
         if "smoke" in f:
             continue
-        m = re.match(r"summary_(\d+)_(.+)_r(\d+)\.dat", os.path.basename(f))
-        job, tag = m[1], m[2]
+        m = re.match(r"summary_(\d+)_(.+)_r(\d+)(_cellorder)?\.dat", os.path.basename(f))
+        job, tag, cell = m[1], m[2], bool(m[4])
         s = read_summary(f)
         K = s["step"][1] - s["step"][0]
         P = int(open(f).read().split("nana")[1].split()[0])
         dt = np.diff(s["t_wall"])
-        pts.append(dict(tag=tag, K=K, P=P, sep=tag.startswith("sep"),
+        pts.append(dict(tag=tag, K=K, P=P, sep=tag.startswith("sep"), cell=cell,
                         kstep=np.median(dt), tana=np.mean(s["t_analysis"][1:]),
                         tmax=np.max(s["t_analysis"]), stall=np.sum(s["t_stall"])))
     if pts:
         p = pd.DataFrame(pts)
-        q = p.groupby(["K", "P", "sep"]).agg(kstep=("kstep", "mean"), tana=("tana", "mean"),
+        q = p.groupby(["K", "P", "sep", "cell"]).agg(kstep=("kstep", "mean"), tana=("tana", "mean"),
                                              tana_sd=("tana", "std"), tmax=("tmax", "max"),
                                              stall=("stall", "mean")).reset_index()
         fig, ax = plt.subplots(1, 2, figsize=(11, 4.3))
@@ -321,12 +371,15 @@ if len(ins):
         cK = {50: VERMILLION, 100: BLUE, 200: GREEN}
         for _, r in q.iterrows():
             ax[0].errorbar(r.kstep, r.tana, yerr=r.tana_sd, marker=mk[r.P],
-                           color=ORANGE if r.sep else cK[r.K], ms=8, capsize=2, ls="none",
-                           mfc="white" if r.sep else None)
+                           color=PINK if r.cell else (ORANGE if r.sep else cK[r.K]), ms=8,
+                           capsize=2, ls="none", mfc="white" if r.sep else None)
             off_ = {(50, 4, False): (-9, 0, "right"), (100, 4, False): (9, -9, "left"),
                     (100, 4, True): (-9, 9, "right"), (200, 4, False): (0, 10, "center")}.get(
                         (int(r.K), int(r.P), bool(r.sep)), (9, 0, "left"))
-            ax[0].annotate("K=%d, P_ana=%d%s" % (r.K, r.P, ", 2nd node" if r.sep else ""),
+            if r.cell:
+                off_ = (9, 0, "left")
+            ax[0].annotate("K=%d, P_ana=%d%s%s" % (r.K, r.P, ", 2nd node" if r.sep else "",
+                                                   ", cell-order kernel" if r.cell else ""),
                            (r.kstep, r.tana), xytext=off_[:2], ha=off_[2], va="center",
                            textcoords="offset points", fontsize=8, color=INK)
         lim = max(q.kstep.max(), q.tana.max()) * 1.25
