@@ -1,0 +1,63 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf scaling job 14364485 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+gs1M_1_r1 gpu_strong_1M N=1048576 P=1 ana=0 K=0 step_ms=51.4849 force_ms=16.3124 comm_ms=2.0412
+gs1M_2_r1 gpu_strong_1M N=1048576 P=2 ana=0 K=0 step_ms=30.7005 force_ms=8.6653 comm_ms=2.3784
+gs1M_4_r1 gpu_strong_1M N=1048576 P=4 ana=0 K=0 step_ms=23.7103 force_ms=8.1421 comm_ms=2.0435
+gs256k_1_r1 gpu_strong_256k N=256000 P=1 ana=0 K=0 step_ms=9.6998 force_ms=4.1871 comm_ms=0.6267
+gw_1_r1 gpu_weak_262k N=262144 P=1 ana=0 K=0 step_ms=9.8661 force_ms=4.1706 comm_ms=0.6699
+gs256k_2_r1 gpu_strong_256k N=256000 P=2 ana=0 K=0 step_ms=6.0905 force_ms=2.3203 comm_ms=0.9614
+gw_2_r1 gpu_weak_262k N=524288 P=2 ana=0 K=0 step_ms=13.6715 force_ms=4.2406 comm_ms=1.5019
+cs_1_r1 cpu_strong_256k N=256000 P=1 ana=0 K=0 step_ms=416.6517 force_ms=411.0017 comm_ms=0.6441
+cw_1_r1 cpu_weak_32k N=32000 P=1 ana=0 K=0 step_ms=56.6047 force_ms=55.8114 comm_ms=0.1469
+cs_2_r1 cpu_strong_256k N=256000 P=2 ana=0 K=0 step_ms=224.4366 force_ms=220.8894 comm_ms=0.7446
+cw_2_r1 cpu_weak_32k N=64000 P=2 ana=0 K=0 step_ms=59.2775 force_ms=58.3728 comm_ms=0.2195
+cs_4_r1 cpu_strong_256k N=256000 P=4 ana=0 K=0 step_ms=126.2311 force_ms=123.8329 comm_ms=0.7219
+cw_4_r1 cpu_weak_32k N=128000 P=4 ana=0 K=0 step_ms=64.6064 force_ms=63.5578 comm_ms=0.3058
+cs_8_r1 cpu_strong_256k N=256000 P=8 ana=0 K=0 step_ms=74.9939 force_ms=72.8745 comm_ms=0.7072
+cw_8_r1 cpu_weak_32k N=256000 P=8 ana=0 K=0 step_ms=75.2768 force_ms=73.1140 comm_ms=0.6468
+cs_16_r1 cpu_strong_256k N=256000 P=16 ana=0 K=0 step_ms=38.0172 force_ms=36.4636 comm_ms=0.5998
+cw_16_r1 cpu_weak_32k N=512000 P=16 ana=0 K=0 step_ms=75.5603 force_ms=73.0984 comm_ms=0.9033
+cs_20_r1 cpu_strong_256k N=256000 P=20 ana=0 K=0 step_ms=30.2189 force_ms=29.0136 comm_ms=0.6111
+cw_20_r1 cpu_weak_32k N=640000 P=20 ana=0 K=0 step_ms=75.7020 force_ms=73.1129 comm_ms=1.0013
+gs1M_1_r2 gpu_strong_1M N=1048576 P=1 ana=0 K=0 step_ms=51.8606 force_ms=16.3169 comm_ms=2.0531
+gs1M_2_r2 gpu_strong_1M N=1048576 P=2 ana=0 K=0 step_ms=30.4774 force_ms=8.6645 comm_ms=2.4215
+gs1M_4_r2 gpu_strong_1M N=1048576 P=4 ana=0 K=0 step_ms=23.5326 force_ms=6.1172 comm_ms=1.9071
+gs256k_1_r2 gpu_strong_256k N=256000 P=1 ana=0 K=0 step_ms=9.7803 force_ms=4.1948 comm_ms=0.6307
+gw_1_r2 gpu_weak_262k N=262144 P=1 ana=0 K=0 step_ms=10.0275 force_ms=4.1695 comm_ms=0.7138
+gs256k_2_r2 gpu_strong_256k N=256000 P=2 ana=0 K=0 step_ms=6.0661 force_ms=2.3227 comm_ms=0.9321
+gw_2_r2 gpu_weak_262k N=524288 P=2 ana=0 K=0 step_ms=13.5221 force_ms=4.2281 comm_ms=1.3702
+cs_1_r2 cpu_strong_256k N=256000 P=1 ana=0 K=0 step_ms=417.0625 force_ms=411.4090 comm_ms=0.6404
+cw_1_r2 cpu_weak_32k N=32000 P=1 ana=0 K=0 step_ms=56.6241 force_ms=55.8347 comm_ms=0.1475
+cs_2_r2 cpu_strong_256k N=256000 P=2 ana=0 K=0 step_ms=225.2373 force_ms=221.6832 comm_ms=0.7621
+cw_2_r2 cpu_weak_32k N=64000 P=2 ana=0 K=0 step_ms=59.5463 force_ms=58.6407 comm_ms=0.2208
+cs_4_r2 cpu_strong_256k N=256000 P=4 ana=0 K=0 step_ms=126.4549 force_ms=124.0559 comm_ms=0.7394
+cw_4_r2 cpu_weak_32k N=128000 P=4 ana=0 K=0 step_ms=64.9448 force_ms=63.8940 comm_ms=0.3095
+cs_8_r2 cpu_strong_256k N=256000 P=8 ana=0 K=0 step_ms=75.7491 force_ms=72.8746 comm_ms=0.6868
+cw_8_r2 cpu_weak_32k N=256000 P=8 ana=0 K=0 step_ms=75.1820 force_ms=73.0262 comm_ms=0.6555
+cs_16_r2 cpu_strong_256k N=256000 P=16 ana=0 K=0 step_ms=38.0102 force_ms=36.4768 comm_ms=0.6038
+cw_16_r2 cpu_weak_32k N=512000 P=16 ana=0 K=0 step_ms=76.4368 force_ms=73.0899 comm_ms=0.9187
+cs_20_r2 cpu_strong_256k N=256000 P=20 ana=0 K=0 step_ms=30.3545 force_ms=28.9303 comm_ms=0.5989
+cw_20_r2 cpu_weak_32k N=640000 P=20 ana=0 K=0 step_ms=76.1776 force_ms=73.1648 comm_ms=1.0032
+gs1M_1_r3 gpu_strong_1M N=1048576 P=1 ana=0 K=0 step_ms=51.8536 force_ms=16.3063 comm_ms=2.0513
+gs1M_2_r3 gpu_strong_1M N=1048576 P=2 ana=0 K=0 step_ms=30.3107 force_ms=8.6554 comm_ms=2.1739
+gs1M_4_r3 gpu_strong_1M N=1048576 P=4 ana=0 K=0 step_ms=23.5083 force_ms=8.1334 comm_ms=1.9288
+gs256k_1_r3 gpu_strong_256k N=256000 P=1 ana=0 K=0 step_ms=9.6008 force_ms=4.1744 comm_ms=0.6028
+gw_1_r3 gpu_weak_262k N=262144 P=1 ana=0 K=0 step_ms=9.9757 force_ms=4.1700 comm_ms=0.6883
+gs256k_2_r3 gpu_strong_256k N=256000 P=2 ana=0 K=0 step_ms=6.0700 force_ms=2.3149 comm_ms=0.9587
+gw_2_r3 gpu_weak_262k N=524288 P=2 ana=0 K=0 step_ms=13.6432 force_ms=4.2242 comm_ms=1.4644
+cw_1_r3 cpu_weak_32k N=32000 P=1 ana=0 K=0 step_ms=56.6546 force_ms=55.8632 comm_ms=0.1459
+cw_2_r3 cpu_weak_32k N=64000 P=2 ana=0 K=0 step_ms=59.5667 force_ms=58.6618 comm_ms=0.2197
+cw_4_r3 cpu_weak_32k N=128000 P=4 ana=0 K=0 step_ms=64.6528 force_ms=63.6002 comm_ms=0.3146
+cw_8_r3 cpu_weak_32k N=256000 P=8 ana=0 K=0 step_ms=75.1499 force_ms=73.0145 comm_ms=0.6496
+cw_16_r3 cpu_weak_32k N=512000 P=16 ana=0 K=0 step_ms=76.2955 force_ms=73.0507 comm_ms=0.8929
+cw_20_r3 cpu_weak_32k N=640000 P=20 ana=0 K=0 step_ms=75.7659 force_ms=73.0977 comm_ms=0.9907
+done Wed Nov 18 23:22:45 PST 2026
