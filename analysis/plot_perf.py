@@ -237,41 +237,56 @@ if len(ins):
     g["o"] = g.label.map({k: i for i, k in enumerate(order)})
     g = g.sort_values(["exp", "o"])
     exps = [e for e in ["insitu", "insitu_sep"] if e in g.exp.values]
-    fig, axs = plt.subplots(1, len(exps), figsize=(5.6 * len(exps), 4.3),
-                            gridspec_kw={"width_ratios": [2.2, 1][:len(exps)]}, squeeze=False)
     rows = []
-    for ax, e in zip(axs[0], exps):
+    for e in exps:
         d = g[g.exp == e]
         off = d[d.label == "off"]["mean"].iloc[0]
         offsd = d[d.label == "off"]["std"].iloc[0]
-        x = np.arange(len(d))
-        cols = [GREY if l == "off" else (ORANGE if "2nd node" in l else BLUE) for l in d.label]
-        ax.bar(x, d["mean"], yerr=d["std"], color=cols, width=0.62, capsize=3,
-               error_kw=dict(ecolor=INK, lw=1))
-        for i, (m, l) in enumerate(zip(d["mean"], d.label)):
-            if l != "off":
-                ax.text(i, m * 1.015 + 0.3, "%+.1f%%" % (100 * (m / off - 1)), ha="center",
-                        va="bottom", fontsize=8, color=INK)
-        ax.set_xticks(x, [l.replace(", ANA", "\nANA").replace(", P_ana", "\nP_ana")
-                          for l in d.label], fontsize=8)
-        ax.set_ylabel("SIM time per MD step (ms)")
-        ax.set_ylim(0, d["mean"].max() * 1.15)
-        ax.grid(axis="x", visible=False)
-        title(ax, "Analysis on the GPU node" if e == "insitu" else "Same node vs 2nd node")
         for _, r in d.iterrows():
             rows.append(dict(job=e, run=r.label, n=r.n, step=r["mean"], std=r["std"],
+                             off=off,
                              over=100 * (r["mean"] / off - 1),
                              over_err=100 * np.hypot(np.nan_to_num(r["std"]) / off,
                                                      r["mean"] * np.nan_to_num(offsd) / off ** 2),
                              tana=r.tana, tana_max=r.tana_max, stall=r.stall,
                              stall_max=r.stall_max,
                              hp=1e3 * (r.halo + r.pack) / r.steps if r.P > 0 else np.nan))
-    note(fig, "N = 1,048,576, 4 SIM ranks on 2 P100 (production layout), 3000 steps (melt, quench, "
-         "seeded hold), every rank on 2 cores, 2 OpenMP threads per ANA rank. "
-         "Bars: mean of 3 runs (off: of all off runs in that job), error bars: sample std.")
+    R = pd.DataFrame(rows)
+    B = R[R.run != "off"].copy()
+    B["grp"] = [("2nd node" if "2nd node" in l else ("P" if "P_ana=4" not in l else "K"))
+                for l in B.run]
+    B["key"] = B.run.map({k: i for i, k in enumerate(order)})
+    B = B.sort_values(["job", "key"])
+    fig, ax = plt.subplots(figsize=(10, 4.4))
+    x = np.arange(len(B))
+    cmap_ = {"K": BLUE, "P": GREEN, "2nd node": ORANGE}
+    ax.bar(x, B.over, yerr=B.over_err, color=[cmap_[k] for k in B.grp], width=0.62, capsize=3,
+           error_kw=dict(ecolor=INK, lw=1))
+    for i, (o, e_, m, f_) in enumerate(zip(B.over, B.over_err, B.step, B.off)):
+        ax.text(i, max(o, 0) + e_ + 0.15, "%+.1f%%\n%.2f vs %.2f ms" % (o, m, f_), ha="center",
+                va="bottom", fontsize=7.5, color=INK)
+    ax.axhline(0, color=INK, lw=0.8)
+    lab = [l.replace(", ANA on a 2nd node", "\nANA on 2nd node").replace(", P_ana", "\nP_ana")
+           for l in B.run]
+    lab = [l + ("\n(job 2)" if j == "insitu_sep" and "2nd" not in l else "") for l, j in zip(lab, B.job)]
+    ax.set_xticks(x, lab, fontsize=8)
+    ax.set_ylabel("SIM step time vs analysis off (%)")
+    ax.set_ylim(min(-1, B.over.min() - 1), (B.over + B.over_err).max() * 1.35 + 1)
+    ax.grid(axis="x", visible=False)
+    for k, l in [("K", "ANA on the GPU node, P_ana = 4, vary K"),
+                 ("P", "ANA on the GPU node, K = 100, vary P_ana"),
+                 ("2nd node", "ANA on a separate CPU node")]:
+        if (B.grp == k).any():
+            ax.bar([np.nan], [np.nan], color=cmap_[k], label=l)
+    ax.legend(loc="upper right", fontsize=8)
+    title(ax, "In situ overhead on the SIM ranks (N = 1,048,576, 4 SIM ranks on 2 P100)")
+    note(fig, "3000 steps (melt, quench, seeded hold), every rank on 2 cores, 2 OpenMP threads per ANA "
+         "rank, 3 runs each.\nBaseline: mean of the off runs of the same job. Error bars: "
+         "sample std propagated from both. Off: %s ms." % ", ".join(
+             "%.2f +- %.2f" % (a_, b_) for a_, b_ in R[R.run == "off"][["step", "std"]].values))
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_insitu_overhead.png")); plt.close(fig)
     print("\n### in situ overhead\n")
-    print(md(pd.DataFrame(rows), [("job", "job"), ("run", "run"), ("n", "n"), ("SIM ms/step", "step"),
+    print(md(R, [("job", "job"), ("run", "run"), ("n", "n"), ("SIM ms/step", "step"),
                                   ("std", "std"), ("vs off (%)", "over"), ("+-", "over_err"),
                                   ("t_analysis mean (s)", "tana"), ("t_analysis max (s)", "tana_max"),
                                   ("stall total (s)", "stall"), ("stall max (s)", "stall_max"),

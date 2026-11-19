@@ -1,0 +1,24 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf insitu job 14363611 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+off_r1 off N=1048576 P=4 ana=0 K=0 step_ms=24.9821 force_ms=11.7145 comm_ms=1.6485
+k50_r1 k50 N=1048576 P=4 ana=4 K=50 step_ms=26.4646 force_ms=14.0447 comm_ms=1.7838
+k100_r1 k100 N=1048576 P=4 ana=4 K=100 step_ms=26.1676 force_ms=11.5235 comm_ms=1.7818
+k200_r1 k200 N=1048576 P=4 ana=4 K=200 step_ms=25.7852 force_ms=11.6770 comm_ms=1.7313
+off_r2 off N=1048576 P=4 ana=0 K=0 step_ms=25.0980 force_ms=14.0362 comm_ms=1.6615
+k50_r2 k50 N=1048576 P=4 ana=4 K=50 step_ms=26.5025 force_ms=11.2677 comm_ms=1.8650
+k100_r2 k100 N=1048576 P=4 ana=4 K=100 step_ms=25.9740 force_ms=14.3104 comm_ms=1.7780
+k200_r2 k200 N=1048576 P=4 ana=4 K=200 step_ms=25.8304 force_ms=13.7558 comm_ms=1.7362
+off_r3 off N=1048576 P=4 ana=0 K=0 step_ms=25.0761 force_ms=13.9627 comm_ms=1.6657
+k50_r3 k50 N=1048576 P=4 ana=4 K=50 step_ms=26.4466 force_ms=14.0642 comm_ms=1.8184
+k100_r3 k100 N=1048576 P=4 ana=4 K=100 step_ms=26.0740 force_ms=14.0085 comm_ms=1.7345
+k200_r3 k200 N=1048576 P=4 ana=4 K=200 step_ms=25.8322 force_ms=11.6250 comm_ms=1.7492
+done Wed Nov 18 22:01:54 PST 2026
