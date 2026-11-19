@@ -1,4 +1,4 @@
-rows: 153 experiments: ['drift', 'insitu', 'insitu_sep', 'scaling', 'speedup']
+rows: 170 experiments: ['drift', 'insitu', 'insitu_sep', 'mixed', 'mixed_melt', 'scaling', 'sortfix', 'speedup']
 
 ### speedup
 
@@ -95,3 +95,25 @@ rows: 153 experiments: ['drift', 'insitu', 'insitu_sep', 'scaling', 'speedup']
 | 200.0 | 4 | False | 5.29 | 0.83 | 0.85 | 0.000 |
 drift host-order threads off mean ms/step melt 27.54 ramp 31.35 hold 31.79 | force melt 14.41 hold 19.32
 drift host-order threads on mean ms/step melt 28.60 ramp 32.50 hold 32.92 | force melt 16.53 hold 20.91
+drift cell-order threads off mean ms/step melt 18.87 ramp 19.06 hold 18.72 | force melt 7.83 hold 7.92
+drift cell-order threads on mean ms/step melt 19.97 ramp 20.36 hold 20.10 | force melt 7.78 hold 7.94
+
+### mixed memory order
+
+| state | layout | N | steps | first 500 (ms) | last 500 (ms) | force first | force last |
+|---|---|---|---|---|---|---|---|
+| solid (NVE from lattice) | cpu20 | 256000 | 3000 | 30.53 | 30.53 | 29.11 | 28.91 |
+| solid (NVE from lattice) | gpu1_old | 256000 | 3000 | 10.98 | 11.01 | 5.44 | 5.46 |
+| solid (NVE from lattice) | gpu1_new | 256000 | 3000 | 9.67 | 9.67 | 4.14 | 4.14 |
+| solid (NVE from lattice) | gpu2_old | 256000 | 3000 | 6.59 | 6.58 | 2.85 | 2.84 |
+| solid (NVE from lattice) | gpu2_new | 256000 | 3000 | 6.09 | 6.10 | 2.47 | 2.44 |
+| solid (NVE from lattice) | cpu20 | 864000 | 2000 | 100.39 | 99.96 | 95.61 | 95.33 |
+| solid (NVE from lattice) | gpu1_old | 864000 | 2000 | 46.82 | 46.80 | 18.47 | 18.56 |
+| solid (NVE from lattice) | gpu1_new | 864000 | 2000 | 41.73 | 41.81 | 13.64 | 13.69 |
+| solid (NVE from lattice) | gpu2_old | 864000 | 2000 | 27.11 | 27.21 | 9.84 | 9.96 |
+| solid (NVE from lattice) | gpu2_new | 864000 | 2000 | 24.61 | 24.59 | 7.25 | 7.25 |
+| liquid (T* = 2 thermostat) | cpu20 | 256000 | 6000 | 30.90 | 32.72 | 29.18 | 31.19 |
+| liquid (T* = 2 thermostat) | gpu1_old | 256000 | 6000 | 11.98 | 16.07 | 5.82 | 9.52 |
+| liquid (T* = 2 thermostat) | gpu1_new | 256000 | 6000 | 10.52 | 11.03 | 4.40 | 4.48 |
+| liquid (T* = 2 thermostat) | gpu2_old | 256000 | 6000 | 7.05 | 9.43 | 3.04 | 5.17 |
+| liquid (T* = 2 thermostat) | gpu2_new | 256000 | 6000 | 6.32 | 6.62 | 2.38 | 2.40 |

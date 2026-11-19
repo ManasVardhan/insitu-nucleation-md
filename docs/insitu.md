@@ -182,8 +182,10 @@ debug limit (`runs/production/prod_p100.in`).
 | Wall time | 59:09 including startup; 36.4 ms/step on average, about 37 ms/step in the hold |
 
 The step time is slower than in the 4000-step smoke tests on the same node (26 to 28 ms/step, below).
-The cause was not measured; the hold phase may simply be slower than the melt-dominated smoke
-test. The `t_wall` summary column, added after this run, will let the next run separate the phases.
+Measured later (`docs/results.md`, section 8): the GPU force call slowed down from 10 to 19 ms per
+rank over the first ~7000 steps as the atoms diffused out of their initial memory order, which the
+smoke tests were too short to reach. The force kernel now assigns threads in cell order, which
+removes the drift and gives 18.7 instead of 31.8 ms per step in the hold, with bit-identical forces.
 
 ### n_max(t)
 

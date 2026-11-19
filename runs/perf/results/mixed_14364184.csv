@@ -1,0 +1,11 @@
+exp,config,bin,sim_ranks,ana_ranks,ana_threads,placement,K,nglob,steps,rep,step_ms,force_ms,comm_ms,wall_s,stall_total,stall_max,halo_total,pack_total,ana_steps,t_ana_mean,t_ana_max,bytes_insitu,bytes_fulldump,nodes,gpu,cpu,jobid
+mixed,cpu20,pmd,20,0,1,same,0,256000,3000,1,30.5231,29.0400,0.4695,91.5694,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu1_old,pmd_cuda_old,1,0,1,same,0,256000,3000,1,11.0006,5.4566,0.6413,33.0017,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu1_new,pmd_cuda,1,0,1,same,0,256000,3000,1,9.6728,4.1419,0.6431,29.0183,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu2_old,pmd_cuda_old,2,0,1,same,0,256000,3000,1,6.5734,2.8461,0.9734,19.7203,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu2_new,pmd_cuda,2,0,1,same,0,256000,3000,1,6.0882,2.4553,0.9658,18.2645,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,cpu20,pmd,20,0,1,same,0,864000,2000,1,100.2546,95.5366,1.4597,200.5092,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu1_old,pmd_cuda_old,1,0,1,same,0,864000,2000,1,46.8190,18.5328,1.7931,93.6380,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu1_new,pmd_cuda,1,0,1,same,0,864000,2000,1,41.7732,13.6726,1.7770,83.5464,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu2_old,pmd_cuda_old,2,0,1,same,0,864000,2000,1,27.1835,9.9225,1.8857,54.3669,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184
+mixed,gpu2_new,pmd_cuda,2,0,1,same,0,864000,2000,1,24.5854,7.2445,1.8785,49.1709,,,,,,,,,,e23-02,Tesla_P100-PCIE-16GB,Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz,14364184

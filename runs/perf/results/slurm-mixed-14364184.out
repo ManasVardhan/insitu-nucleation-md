@@ -1,0 +1,22 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf mixed job 14364184 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+cpu20_N256000 cpu20 N=256000 P=20 ana=0 K=0 step_ms=30.5231 force_ms=29.0400 comm_ms=0.4695
+gpu1_old_N256000 gpu1_old N=256000 P=1 ana=0 K=0 step_ms=11.0006 force_ms=5.4566 comm_ms=0.6413
+gpu1_new_N256000 gpu1_new N=256000 P=1 ana=0 K=0 step_ms=9.6728 force_ms=4.1419 comm_ms=0.6431
+gpu2_old_N256000 gpu2_old N=256000 P=2 ana=0 K=0 step_ms=6.5734 force_ms=2.8461 comm_ms=0.9734
+gpu2_new_N256000 gpu2_new N=256000 P=2 ana=0 K=0 step_ms=6.0882 force_ms=2.4553 comm_ms=0.9658
+cpu20_N864000 cpu20 N=864000 P=20 ana=0 K=0 step_ms=100.2546 force_ms=95.5366 comm_ms=1.4597
+gpu1_old_N864000 gpu1_old N=864000 P=1 ana=0 K=0 step_ms=46.8190 force_ms=18.5328 comm_ms=1.7931
+gpu1_new_N864000 gpu1_new N=864000 P=1 ana=0 K=0 step_ms=41.7732 force_ms=13.6726 comm_ms=1.7770
+gpu2_old_N864000 gpu2_old N=864000 P=2 ana=0 K=0 step_ms=27.1835 force_ms=9.9225 comm_ms=1.8857
+gpu2_new_N864000 gpu2_new N=864000 P=2 ana=0 K=0 step_ms=24.5854 force_ms=7.2445 comm_ms=1.8785
+done Wed Nov 18 22:38:40 PST 2026

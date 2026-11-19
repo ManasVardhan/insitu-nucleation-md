@@ -388,3 +388,57 @@ if wf:
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), fontsize=8, ncol=2)
     title(ax, "Step time along the production protocol (N = 1,048,576, 4 SIM on 2 P100)")
     fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_step_time_drift.png")); plt.close(fig)
+
+# ---------------------------------------------------------------- mixed memory order
+mf = [f for f in glob.glob(os.path.join(RES, "mixed*_*.wall")) if "smoke" not in f]
+if mf:
+    rows = []
+    for f in mf:
+        m = re.match(r"mixed(melt)?_\d+_(.+)_N(\d+)\.wall", os.path.basename(f))
+        w = np.loadtxt(f, usecols=(1, 2, 3, 4))
+        st, wall, fc = w[:, 0], w[:, 1], w[:, 2]
+        win = 500
+        i0 = np.searchsorted(st, win)          # first window: steps 0 to 500
+        e_ = 1e3 * wall[i0] / st[i0]
+        ef = 1e3 * fc[i0] / st[i0]
+        j = np.searchsorted(st, st[-1] - win)  # last window
+        l_ = 1e3 * (wall[-1] - wall[j]) / (st[-1] - st[j])
+        lf = 1e3 * (fc[-1] - fc[j]) / (st[-1] - st[j])
+        rows.append(dict(state="liquid (T* = 2 thermostat)" if m[1] else "solid (NVE from lattice)",
+                         cfg=m[2], N=int(m[3]), steps=int(st[-1]), early=e_, late=l_,
+                         early_f=ef, late_f=lf))
+    M = pd.DataFrame(rows)
+    order_m = ["cpu20", "gpu1_old", "gpu1_new", "gpu2_old", "gpu2_new"]
+    names = {"cpu20": "CPU, 20 cores", "gpu1_old": "1 P100, old kernel",
+             "gpu1_new": "1 P100, new kernel", "gpu2_old": "2 P100, old kernel",
+             "gpu2_new": "2 P100, new kernel"}
+    cols = {"cpu20": PINK, "gpu1_old": SKY if False else "#56B4E9", "gpu1_new": BLUE,
+            "gpu2_old": "#7fd1b9", "gpu2_new": GREEN}
+    M["o"] = M.cfg.map({k: i for i, k in enumerate(order_m)})
+    M = M.sort_values(["state", "N", "o"], ascending=[False, True, True])
+    panels = list(dict.fromkeys(zip(M.state, M.N)))
+    fig, axs = plt.subplots(1, len(panels), figsize=(5.2 * len(panels), 4.4), squeeze=False)
+    for ax, (stt, n) in zip(axs[0], panels):
+        d = M[(M.N == n) & (M.state == stt)]
+        x = np.arange(len(d))
+        ax.bar(x - 0.2, d.early, 0.38, color=[cols[c] for c in d.cfg], alpha=0.45)
+        ax.bar(x + 0.2, d.late, 0.38, color=[cols[c] for c in d.cfg])
+        cpu = d[d.cfg == "cpu20"].late.iloc[0]
+        for i, (c, e_, l_) in enumerate(zip(d.cfg, d.early, d.late)):
+            ax.text(i + 0.2, l_, "%.1f" % l_ if c == "cpu20" else "%.1f\n%.1fx" % (l_, cpu / l_),
+                    ha="center", va="bottom", fontsize=7.5, color=INK)
+            ax.text(i - 0.2, e_, "%.1f" % e_, ha="center", va="bottom", fontsize=7, color=MUTED)
+        ax.set_xticks(x, [names[c].replace(", ", "\n") for c in d.cfg], fontsize=8)
+        ax.set_ylabel("time per MD step (ms)"); ax.grid(axis="x", visible=False)
+        ax.set_ylim(0, max(d.early.max(), d.late.max()) * 1.25)
+        title(ax, "N = {:,}, {}, {:,} steps".format(n, stt, d.steps.iloc[0]))
+        from matplotlib.patches import Patch
+        ax.legend(handles=[Patch(color=GREY, alpha=0.45, label="first 500 steps"),
+                           Patch(color=GREY, label="last 500 steps")], loc="upper right", fontsize=8)
+    note(fig, "Light bars: first 500 steps from the FCC lattice; dark bars: last 500 steps, labeled with "
+         "the speedup over the 20-core CPU path. " + HW + ".")
+    fig.tight_layout(); fig.savefig(os.path.join(IMG, "perf_mixed.png")); plt.close(fig)
+    print("\n### mixed memory order\n")
+    print(md(M, [("state", "state"), ("layout", "cfg"), ("N", "N"), ("steps", "steps"), ("first 500 (ms)", "early"),
+                 ("last 500 (ms)", "late"), ("force first", "early_f"), ("force last", "late_f")],
+             {k: (lambda v: "%.2f" % v) for k in ["early", "late", "early_f", "late_f"]}))

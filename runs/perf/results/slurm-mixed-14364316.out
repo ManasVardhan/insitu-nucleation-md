@@ -1,0 +1,17 @@
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+
+Due to MODULEPATH changes, the following have been reloaded:
+  1) python/3.11.9
+
+perf mixed_melt job 14364316 on e23-02.hpc.usc.edu: gpu Tesla_P100-PCIE-16GB cpu Intel(R)_Xeon(R)_CPU_E5-2640_v4_@_2.40GHz
+GPU 0: Tesla P100-PCIE-16GB (UUID: GPU-a7f78dbd-8e63-b41f-c4f4-78c948ea9cbe)
+GPU 1: Tesla P100-PCIE-16GB (UUID: GPU-2829bfc5-7686-86cd-c47c-b88c2de76c56)
+cpu20_N256000 cpu20 N=256000 P=20 ana=0 K=0 step_ms=32.1268 force_ms=30.6251 comm_ms=0.4404
+gpu1_old_N256000 gpu1_old N=256000 P=1 ana=0 K=0 step_ms=14.5753 force_ms=8.1295 comm_ms=0.6570
+gpu1_new_N256000 gpu1_new N=256000 P=1 ana=0 K=0 step_ms=10.8809 force_ms=4.4472 comm_ms=0.6411
+gpu2_old_N256000 gpu2_old N=256000 P=2 ana=0 K=0 step_ms=8.6896 force_ms=4.4703 comm_ms=0.7038
+gpu2_new_N256000 gpu2_new N=256000 P=2 ana=0 K=0 step_ms=6.5312 force_ms=2.3932 comm_ms=0.6910
+done Wed Nov 18 22:47:19 PST 2026
