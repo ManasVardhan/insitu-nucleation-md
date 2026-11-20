@@ -6,7 +6,7 @@ while a separate group of MPI analysis ranks labels every atom as liquid or crys
 tracks the growing crystal nucleus, so the trajectory never has to be written to disk.
 
 Project site with the live simulation sketch and interactive figures: https://manasvardhan.com/insitu-nucleation-md/
-(source in [`site/`](site/), deployed by GitHub Pages).
+(source in [`site/`](site/), deployed by GitHub Pages). Course final project report: [docs/report.md](docs/report.md).
 
 ![A crystal growing from a seed in 1,048,576 supercooled LJ atoms](docs/media/nucleation_crystal.gif)
 
